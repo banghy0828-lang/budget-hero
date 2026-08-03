@@ -148,7 +148,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .cp{
   background:var(--card);border:1px solid var(--line);
   border-radius:var(--r);padding:20px 22px;margin-bottom:10px;
+  cursor:pointer;transition:opacity .15s;
 }
+.cp:active{opacity:.8}
 .cp-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .cp-left{display:flex;align-items:center;gap:10px}
 .cp-emo{font-size:22px;line-height:1}
@@ -200,7 +202,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .tx-amt.exp{color:var(--t1)}
 .tx-amt.inc{color:var(--green)}
 .tx-amt.sav{color:var(--blue)}
-.tx-del{display:block;margin-top:4px;background:rgba(192,67,46,.12);border:none;color:var(--red);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.tx-actions{display:flex;gap:6px;margin-top:4px;justify-content:flex-end}
+.tx-del{background:rgba(192,67,46,.12);border:none;color:var(--red);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.tx-edit{background:rgba(33,114,166,.12);border:none;color:var(--blue);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
 
 /* ═══ BOTTOM NAV ═══ */
 .bnav{
@@ -294,6 +298,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .parsed-form{display:none}
 .parsed-form.on{display:block}
 .ocr-ok{background:rgba(46,139,87,.08);border:1px solid rgba(46,139,87,.22);border-radius:var(--r-sm);padding:11px 16px;margin-bottom:18px;font-size:13px;color:var(--green);font-weight:500}
+.ocr-item-card{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin-bottom:10px;transition:opacity .15s}
+.ocr-item-card.excluded{opacity:.4}
 
 /* quick */
 .quick-big{
@@ -615,6 +621,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   <div class="sec"><div class="sec-hdr"><div class="sec-title">카테고리별 예산</div><div class="sec-link" onclick="navTo('settings')">설정</div></div><div id="home-cat-prog"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 지출</div><div class="sec-link" onclick="navTo('hist-exp')">전체</div></div><div class="tx-card" id="h-rec-exp"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 수입</div><div class="sec-link" onclick="navTo('hist-inc')">전체</div></div><div class="tx-card" id="h-rec-inc"></div></div>
+  <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 저축</div><div class="sec-link" onclick="navTo('hist-sav')">전체</div></div><div class="tx-card" id="h-rec-sav"></div></div>
 </div>
 
 <!-- ═══ EXPENSE ═══ -->
@@ -630,24 +637,18 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div id="exp-ocr-wrap">
       <div class="ocr-zone" id="exp-ocr-zone">
         <input type="file" accept="image/*" capture="environment" onchange="handleImg(event)">
-        <div class="ocr-ico">📸</div><div class="ocr-ttl">영수증 · 결제 내역 업로드</div>
-        <div class="ocr-sub">금액, 상호명, 날짜를 자동으로 인식합니다</div>
-        <div class="ocr-tags"><span class="ocr-tag">영수증</span><span class="ocr-tag">카드문자</span><span class="ocr-tag">카카오페이</span><span class="ocr-tag">토스</span></div>
+        <div class="ocr-ico">📸</div><div class="ocr-ttl">지출 목록 캡처 업로드</div>
+        <div class="ocr-sub">그날 쓴 내역 전체를 한 장에 캡처하면<br>여러 건이어도 자동으로 나눠 인식해요</div>
+        <div class="ocr-tags"><span class="ocr-tag">카드 내역</span><span class="ocr-tag">가계부 캡처</span><span class="ocr-tag">카카오페이</span><span class="ocr-tag">토스</span></div>
       </div>
       <div class="ocr-prog" id="e-ocr-prog"><div class="spin"></div><div class="prog-lbl" id="e-prog-lbl">처리 중...</div><div class="prog-sub" id="e-prog-sub">텍스트 인식 중</div><div class="prog-bar-wrap"><div class="prog-bar" id="e-prog-bar" style="width:0%"></div></div></div>
       <div class="parsed-form" id="e-parsed">
         <div id="e-preview"></div>
-        <div class="ocr-ok">✅ OCR 인식 완료 — 확인 후 저장하세요</div>
-        <div class="field"><div class="f-lbl">금액</div><input class="f-in big-exp" id="ef-amt" type="number" placeholder="0" min="0" inputmode="numeric"></div>
-        <div class="field"><div class="f-lbl">상호명</div><input class="f-in" id="ef-mer" type="text" placeholder="상호명" maxlength="30" oninput="onEfMer()"></div>
-        <div class="field"><div class="f-lbl">날짜</div><div class="date-sel-wrap" id="ef-date-wrap"></div></div>
-        <div class="field"><div class="f-lbl">카테고리</div><div class="chips" id="ef-cats"></div></div>
-        <div class="field"><div class="f-lbl">결제수단</div><div class="pay-chips" id="ef-pays">
-          <div class="pc sel" data-p="카드" onclick="selPC(this,'ef')">카드</div><div class="pc" data-p="현금" onclick="selPC(this,'ef')">현금</div>
-          <div class="pc" data-p="카카오페이" onclick="selPC(this,'ef')">카카오페이</div><div class="pc" data-p="토스" onclick="selPC(this,'ef')">토스</div><div class="pc" data-p="네이버페이" onclick="selPC(this,'ef')">네이버페이</div>
-        </div></div>
-        <div class="field"><div class="f-lbl">메모</div><input class="f-in" id="ef-memo" type="text" placeholder="선택 입력" maxlength="60"></div>
-        <button class="save-btn exp-btn" onclick="saveExp('ocr')">지출 저장</button>
+        <div class="ocr-ok" id="e-ocr-ok">✅ 인식 완료 — 확인 후 저장하세요</div>
+        <div class="field"><div class="f-lbl">날짜 (전체 항목 공통)</div><div class="date-sel-wrap" id="eo-date-wrap"></div></div>
+        <div id="eo-items"></div>
+        <button style="width:100%;background:var(--card2);border:1px dashed var(--line);border-radius:var(--r-md);padding:12px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;margin-bottom:16px" onclick="addOcrItem()">＋ 항목 직접 추가</button>
+        <button class="save-btn exp-btn" id="eo-save" onclick="saveOcrItems()">전체 저장</button>
         <button style="width:100%;background:none;border:none;color:var(--t3);font-size:13px;padding:12px;cursor:pointer;font-family:inherit;margin-top:4px" onclick="resetOcr()">다시 업로드</button>
       </div>
     </div>
@@ -673,7 +674,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
         <div class="pc" data-p="카카오페이" onclick="selPC(this,'em')">카카오페이</div><div class="pc" data-p="토스" onclick="selPC(this,'em')">토스</div>
       </div></div>
       <div class="field"><div class="f-lbl">메모</div><input class="f-in" id="em-memo" type="text" placeholder="선택 입력" maxlength="60"></div>
-      <button class="save-btn exp-btn" id="em-save" onclick="saveExp('manual')" disabled>지출 저장</button>
+      <button class="save-btn exp-btn" id="em-save" onclick="saveExp()" disabled>지출 저장</button>
     </div>
   </div>
 </div>
@@ -999,6 +1000,32 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   </div>
 </div>
 
+<!-- Edit tx modal -->
+<div class="modal-bg" id="edit-tx-modal" onclick="closeEditTx(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="et-title">내역 수정</div>
+    <div class="field"><div class="f-lbl" id="et-amt-lbl">금액</div><input class="f-in" id="et-amt" type="number" min="0" inputmode="numeric"></div>
+    <div class="field"><div class="f-lbl" id="et-name-lbl">이름</div><input class="f-in" id="et-name" type="text" maxlength="30"></div>
+    <div class="field"><div class="f-lbl">날짜</div><div class="date-sel-wrap" id="et-date-wrap"></div></div>
+    <div class="field"><div class="f-lbl">카테고리</div><div class="chips" id="et-cats"></div></div>
+    <div class="field" id="et-pay-field" style="display:none">
+      <div class="f-lbl">결제수단</div>
+      <div class="pay-chips" id="et-pays">
+        <div class="pc" data-p="카드" onclick="selPC(this,'et')">카드</div><div class="pc" data-p="현금" onclick="selPC(this,'et')">현금</div>
+        <div class="pc" data-p="카카오페이" onclick="selPC(this,'et')">카카오페이</div><div class="pc" data-p="토스" onclick="selPC(this,'et')">토스</div><div class="pc" data-p="네이버페이" onclick="selPC(this,'et')">네이버페이</div>
+      </div>
+    </div>
+    <div class="field" id="et-goal-field" style="display:none">
+      <div class="f-lbl">연결 목표</div>
+      <select class="f-in" id="et-goal" style="cursor:pointer"><option value="">목표 없음</option></select>
+    </div>
+    <div class="field"><div class="f-lbl">메모</div><input class="f-in" id="et-memo" type="text" maxlength="60"></div>
+    <button class="save-btn" id="et-save" style="background:var(--purple);color:var(--on-color)" onclick="saveEditTx()">저장</button>
+    <button onclick="closeEditTx()" style="width:100%;background:none;border:none;color:var(--t3);font-size:13px;padding:12px;cursor:pointer;font-family:inherit;margin-top:2px">취소</button>
+  </div>
+</div>
+
 <!-- Emoji modal -->
 <div class="modal-bg" id="emoji-modal" onclick="closeEmojiModal(event)">
   <div class="modal-sheet" onclick="event.stopPropagation()">
@@ -1289,6 +1316,7 @@ const ExpRepo={
   all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
   save(a){localStorage.setItem(this._k,JSON.stringify(a));cloudSaveAll(this._c,a)},
   add(e){const a=this.all();a.unshift(e);localStorage.setItem(this._k,JSON.stringify(a));cloudSet(this._c,e);return e},
+  update(id,p){const a=this.all();const i=a.findIndex(x=>x.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a);cloudSet(this._c,a[i]);}},
   del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)},
   ofPeriod(start,end){return this.all().filter(e=>e.date&&e.date>=start&&e.date<=end)},
   ofDate(d){return this.all().filter(e=>e.date===d)}
@@ -1298,6 +1326,7 @@ const IncRepo={
   all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
   save(a){localStorage.setItem(this._k,JSON.stringify(a));cloudSaveAll(this._c,a)},
   add(e){const a=this.all();a.unshift(e);localStorage.setItem(this._k,JSON.stringify(a));cloudSet(this._c,e);return e},
+  update(id,p){const a=this.all();const i=a.findIndex(x=>x.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a);cloudSet(this._c,a[i]);}},
   del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)},
   ofPeriod(start,end){return this.all().filter(e=>e.date&&e.date>=start&&e.date<=end)},
   ofDate(d){return this.all().filter(e=>e.date===d)}
@@ -1307,6 +1336,7 @@ const SavRepo={
   all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
   save(a){localStorage.setItem(this._k,JSON.stringify(a));cloudSaveAll(this._c,a)},
   add(e){const a=this.all();a.unshift(e);localStorage.setItem(this._k,JSON.stringify(a));cloudSet(this._c,e);return e},
+  update(id,p){const a=this.all();const i=a.findIndex(x=>x.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a);cloudSet(this._c,a[i]);}},
   del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)},
   ofPeriod(start,end){return this.all().filter(e=>e.date&&e.date>=start&&e.date<=end)},
   ofDate(d){return this.all().filter(e=>e.date===d)}
@@ -1654,6 +1684,7 @@ function renderHome(){
   renderCatProg('home-cat-prog',el,pel);
   renderRecent('h-rec-exp',el.slice(0,4),'exp');
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
+  renderRecent('h-rec-sav',sl.slice(0,4),'sav');
 }
 
 /* Period badge shown at top of Home & Stats — shows active range + change button */
@@ -1790,7 +1821,7 @@ function buildCpCard(c,use,prevUse){
   const dSign=diff>0?'+':'';
   const dCls=diff>0?'up':diff<0?'dn':'flat';
   const diffTxt=(prevUse===0&&use===0)?'—':`${dSign}${fmt(diff)}${prevUse>0?` (${dSign}${diffPct}%)`:''}`;
-  return`<div class="cp">
+  return`<div class="cp" onclick="openCatDetail('${c.id}')">
     <div class="cp-top">
       <div class="cp-left"><div class="cp-emo">${esc(c.emoji)||'📦'}</div><div class="cp-name">${esc(c.name)}</div></div>
       <div class="cp-badge ${cls}">${pct}%</div>
@@ -1814,11 +1845,11 @@ function buildCpCard(c,use,prevUse){
 function renderRecent(elId,list,type){
   const el=document.getElementById(elId);
   if(!list.length){el.innerHTML=`<div style="padding:18px 20px;text-align:center;color:var(--t3);font-size:13px">내역 없음</div>`;return;}
-  const cats=type==='exp'?CatRepo.get():[];
+  const cats=type==='exp'?CatRepo.get():type==='inc'?INC_CATS:SAV_CATS;
   el.innerHTML=list.map(e=>{
     const ci=cats.find(c=>c.name===e.category)||{emoji:'📦'};
     const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
-    return`<div class="tx-item">
+    return`<div class="tx-item" onclick="openEditTx('${type}','${e.id}')" style="cursor:pointer">
       <div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
       <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)} · ${fmtD(e.date)}</div></div>
       <div class="tx-right"><div class="tx-amt ${type==='exp'?'exp':type==='inc'?'inc':'sav'}">${type==='exp'?'−':'+'} ${fmt(e.amount)}</div></div>
@@ -1839,8 +1870,9 @@ function renderChips(elId,cats,key,cls){
     `<span class="ce">${esc(c.emoji)||'📦'}</span>${esc(c.name)}</div>`).join('');
 }
 function pickChip(elId,key,idx,cls){const cats=chipCats(key);const c=cats[idx];if(!c)return;selCat[key]=c.name;renderChips(elId,cats,key,cls);}
-function chipCats(key){return key==='inc'?INC_CATS:key==='sav'?SAV_CATS:CatRepo.get();}
-function chipCls(key){return key==='inc'?'sel-inc':key==='sav'?'sel-sav':'sel-exp';}
+// 'et'(수정 모달)는 수정 중인 항목의 타입(_etType)에 따라 exp/inc/sav 카테고리 목록이 바뀐다
+function chipCats(key){const k=key==='et'?_etType:key;return k==='inc'?INC_CATS:k==='sav'?SAV_CATS:CatRepo.get();}
+function chipCls(key){const k=key==='et'?_etType:key;return k==='inc'?'sel-inc':k==='sav'?'sel-sav':'sel-exp';}
 
 function selPC(el,prefix){
   document.querySelectorAll(`#${prefix}-pays .pc`).forEach(c=>c.classList.remove('sel'));
@@ -1850,17 +1882,15 @@ function selPC(el,prefix){
 /* ═══════════════════════════ EXPENSE FORM ═══════════════════════════ */
 function initExpForm(){
   setExpMode('ocr');
-  const cats=CatRepo.get();selCat.ef=cats[0]?.name||'기타';selCat.em=cats[0]?.name||'기타';
-  selPay.ef='카드';selPay.em='카드';
+  const cats=CatRepo.get();selCat.em=cats[0]?.name||'기타';
+  selPay.em='카드';
   const t=today_();
-  buildDateSel('ef-date-wrap','ef-date',t);
   buildDateSel('em-date-wrap','em-date',t);
-  ['ef-amt','ef-mer','ef-memo','em-amt','em-mer','em-memo'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['em-amt','em-mer','em-memo'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('em-save').disabled=true;
   document.getElementById('eq-save').disabled=true;
   document.getElementById('eq-in').value='';
   document.getElementById('eq-parsed').classList.remove('on');
-  renderChips('ef-cats',cats,'ef','sel-exp');
   renderChips('em-cats',cats,'em','sel-exp');
   resetOcr();
 }
@@ -1871,16 +1901,14 @@ function setExpMode(m){
   });
   if(m==='quick')setTimeout(()=>document.getElementById('eq-in').focus(),80);
 }
-function onEfMer(){const m=document.getElementById('ef-mer').value;if(m){selCat.ef=classify(m);renderChips('ef-cats',CatRepo.get(),'ef','sel-exp');}}
 function onEmChange(){
   const a=document.getElementById('em-amt').value,m=document.getElementById('em-mer').value;
   document.getElementById('em-save').disabled=!a||!m;
   if(m){selCat.em=classify(m);renderChips('em-cats',CatRepo.get(),'em','sel-exp');}
 }
-function saveExp(src){
-  let amt,mer,date,cat,pay,memo;
-  if(src==='ocr'){amt=parseInt(document.getElementById('ef-amt').value);mer=document.getElementById('ef-mer').value;date=getDateStr('ef-date');cat=selCat.ef;pay=selPay.ef;memo=document.getElementById('ef-memo').value;}
-  else{amt=parseInt(document.getElementById('em-amt').value);mer=document.getElementById('em-mer').value;date=getDateStr('em-date');cat=selCat.em;pay=selPay.em;memo=document.getElementById('em-memo').value;}
+function saveExp(){
+  const amt=parseInt(document.getElementById('em-amt').value),mer=document.getElementById('em-mer').value;
+  const date=getDateStr('em-date'),cat=selCat.em,pay=selPay.em,memo=document.getElementById('em-memo').value;
   if(!amt||amt<=0||!mer){showToast('⚠️ 올바른 금액과 상호명을 입력해주세요');return;}
   if(cat!==classify(mer)){const catObj=CatRepo.get().find(c=>c.name===cat);if(catObj)LearnedRepo.set(mer,catObj.id);}
   ExpRepo.add({id:uid(),amount:amt,merchant:mer,category:cat,date:date||today_(),payment:pay,memo,createdAt:new Date().toISOString()});
@@ -1961,10 +1989,10 @@ function renderHist(type){
         <div style="font-size:13px;font-weight:700;color:${type==='exp'?'var(--red)':'var(--green)'}">${sign}${fmt(sumAmt(items))}</div>
       </div>
       <div class="tx-card" style="margin:0 22px">
-        ${items.map(e=>{const ci=cats.find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
+        ${items.map(e=>{const ci=(type==='exp'?cats:type==='inc'?INC_CATS:SAV_CATS).find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
           return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
           <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)}${e.payment?' · '+esc(e.payment):''} · ${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div>
-          <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(e.amount)}</div><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div>`;
+          <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(e.amount)}</div><div class="tx-actions"><button class="tx-edit" onclick="openEditTx('${type}','${e.id}',event)">수정</button><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div></div>`;
         }).join('')}
       </div></div>`;
   }).join('');
@@ -1986,11 +2014,92 @@ function delTx(type,id,ev){
       }
     }
     renderHist(type);showToast('🗑 삭제됐어요');
+    if(document.getElementById('sc-home').classList.contains('active'))renderHome();
   });
 }
 
+/* 지출/수입/저축 내역 수정 — 하나의 공용 바텀시트를 타입에 맞게 필드만 바꿔서 재사용 */
+let _etType=null,_etId=null;
+function openEditTx(type,id,ev){
+  if(ev)ev.stopPropagation();
+  const repo=type==='exp'?ExpRepo:type==='inc'?IncRepo:SavRepo;
+  const rec=repo.all().find(x=>x.id===id);if(!rec)return;
+  _etType=type;_etId=id;
+  const titleMap={exp:'지출 수정',inc:'수입 수정',sav:'저축 수정'};
+  const nameLblMap={exp:'상호명',inc:'출처',sav:'저축처'};
+  document.getElementById('et-title').textContent=titleMap[type];
+  document.getElementById('et-name-lbl').textContent=nameLblMap[type];
+  document.getElementById('et-amt').value=rec.amount;
+  document.getElementById('et-name').value=type==='exp'?rec.merchant:type==='inc'?rec.source:rec.name;
+  document.getElementById('et-memo').value=rec.memo||'';
+  buildDateSel('et-date-wrap','et-date',rec.date||today_());
+  selCat.et=rec.category;
+  renderChips('et-cats',chipCats('et'),'et',chipCls('et'));
+  document.getElementById('et-pay-field').style.display=type==='exp'?'block':'none';
+  if(type==='exp'){
+    selPay.et=rec.payment||'카드';
+    document.querySelectorAll('#et-pays .pc').forEach(c=>c.classList.toggle('sel',c.dataset.p===selPay.et));
+  }
+  document.getElementById('et-goal-field').style.display=type==='sav'?'block':'none';
+  if(type==='sav'){
+    const sel=document.getElementById('et-goal');sel.innerHTML='<option value="">목표 없음</option>';
+    GoalRepo.all().forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=(g.emoji||'🎯')+' '+g.name;sel.appendChild(o);});
+    sel.value=rec.goalId||'';
+  }
+  document.getElementById('edit-tx-modal').classList.add('on');
+}
+function closeEditTx(ev){if(!ev||ev.target.id==='edit-tx-modal')document.getElementById('edit-tx-modal').classList.remove('on');}
+function saveEditTx(){
+  const amt=parseInt(document.getElementById('et-amt').value);
+  const name=document.getElementById('et-name').value.trim();
+  if(!amt||amt<=0||!name){showToast('⚠️ 올바른 금액과 이름을 입력해주세요');return;}
+  const type=_etType,id=_etId;
+  const date=getDateStr('et-date');
+  const memo=document.getElementById('et-memo').value;
+  const patch={amount:amt,category:selCat.et,date,memo};
+  if(type==='exp'){
+    patch.merchant=name;patch.payment=selPay.et||'카드';
+    ExpRepo.update(id,patch);
+  }else if(type==='inc'){
+    patch.source=name;
+    IncRepo.update(id,patch);
+  }else{
+    patch.name=name;
+    const newGoalId=document.getElementById('et-goal').value;
+    const rec=SavRepo.all().find(x=>x.id===id);
+    const oldGoalId=rec.goalId,oldAmt=rec.amount;
+    // 목표 연결이 바뀌거나 금액이 바뀌면, 예전 목표에서는 빼고 새 목표에는 더해줘야
+    // 목표 달성률이 실제 저축 내역과 어긋나지 않는다
+    if(oldGoalId){const g=GoalRepo.all().find(x=>x.id===oldGoalId);if(g)GoalRepo.update(oldGoalId,{current:Math.max(0,(g.current||0)-oldAmt)});}
+    if(newGoalId){const g=GoalRepo.all().find(x=>x.id===newGoalId);if(g)GoalRepo.update(newGoalId,{current:(g.current||0)+amt});}
+    patch.goalId=newGoalId||null;
+    SavRepo.update(id,patch);
+  }
+  document.getElementById('edit-tx-modal').classList.remove('on');
+  renderHist(type);
+  if(document.getElementById('sc-home').classList.contains('active'))renderHome();
+  showToast('✅ 수정됐어요');
+}
+
 /* ═══════════════════════════ EMOJI PICKER (shared modal) ═══════════════════════════ */
-const EMOJI_LIST=['🎯','✈️','🏠','🚗','💍','🎓','👶','🏖','💻','📱','🎸','⌚','👟','💰','🏥','🐾','🎮','📷','🛋','🍎','🍽','☕','🚌','🛍','🎬','📺','📚','📦'];
+const EMOJI_LIST=[
+  // 식비·카페
+  '🍽','🍚','🍜','🍱','🍔','🍕','🍗','🍣','🍰','🍪','☕','🧋','🍺','🍷',
+  // 교통·자동차
+  '🚌','🚕','🚗','🚇','🚲','🛵','⛽','🅿️','✈️',
+  // 쇼핑·생활
+  '🛍','🛒','👕','👟','💄','🧴','🧻','🛋','🏠','💡','🔧',
+  // 문화·여가
+  '🎬','🎮','📷','🎸','🎨','⚽','🏖','🎡','🎟','📚','🎧',
+  // 건강·의료
+  '🏥','💊','🦷','🏋️','🧘',
+  // 통신·구독
+  '📱','💻','📺','☁️','📰',
+  // 교육·양육
+  '🎓','✏️','👶','🐾',
+  // 금융·기타
+  '💰','💳','🏦','🛡','📈','🎁','💍','🎯','⌚','📦'
+];
 let _emojiPickerCb=null;
 function openEmojiPickerGeneric(current,cb){
   _emojiPickerCb=cb;
@@ -2129,8 +2238,9 @@ function simGoal(id,val){
   box.classList.add('on');
 }
 
-/* ═══════════════════════════ STATS / CALENDAR ═══════════════════════════ */
-let statsAnchor=today_();
+/* ═══════════════════════════ STATS / CALENDAR ═══════════════════════════
+   통계 화면의 상단 요약·카테고리 분석은 홈과 동일하게 PeriodStore(사용자 지정 기간 포함)를
+   따른다. 달력·6개월 추이 차트는 태생적으로 '월' 단위 시각화라 별도 월 앵커를 유지한다. */
 let calAnchor=today_();
 function monthRange(dateStr){
   const d=toDateObj(dateStr);
@@ -2138,18 +2248,14 @@ function monthRange(dateStr){
   const end=toDateStr(new Date(d.getFullYear(),d.getMonth()+1,0));
   return{start,end};
 }
-function statsAdj(dir){statsAnchor=addMonths(statsAnchor,dir);renderStats();}
+function statsAdj(dir){PeriodStore.adjust(dir);renderStats();}
 function calAdj(dir){calAnchor=addMonths(calAnchor,dir);renderCalendar();}
 
 function renderStats(){
-  const d=toDateObj(statsAnchor);
-  document.getElementById('stats-lbl').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월`;
-  const{start,end}=monthRange(statsAnchor);
-  document.getElementById('stats-period-badge').innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:10px;color:var(--t3);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">조회 기간</div>
-      <div style="font-size:15px;font-weight:800;letter-spacing:-.02em">${fmtPeriodLabel(start,end)}</div></div>
-    </div>`;
+  document.getElementById('stats-lbl').textContent=PeriodStore.label();
+  renderPeriodBadge('stats-period-badge');
+  const{start,end}=PeriodStore.getRange();
+  const{start:pstart,end:pend}=PeriodStore.getPrevRange();
   const el=expOfPeriod(start,end),il=incOfPeriod(start,end),sl=savOfPeriod(start,end);
   const inc=sumAmt(il),exp=sumAmt(el),sav=sumAmt(sl);
   document.getElementById('st-inc').textContent=fmt(inc);
@@ -2157,9 +2263,7 @@ function renderStats(){
   document.getElementById('st-sav').textContent=fmt(sav);
   document.getElementById('st-rate').textContent=(inc>0?Math.round(sav/inc*100):0)+'%';
 
-  const prevAnchor=addMonths(statsAnchor,-1);
-  const pr=monthRange(prevAnchor);
-  const pel=expOfPeriod(pr.start,pr.end);
+  const pel=expOfPeriod(pstart,pend);
   renderCatProg('stats-cat-prog',el,pel);
 
   const cats=CatRepo.get();
@@ -2172,16 +2276,16 @@ function renderStats(){
     brEl.innerHTML=rows.map(([name,amt])=>{
       const c=cats.find(x=>x.name===name)||{emoji:'📦'};
       const pct=exp>0?Math.round(amt/exp*100):0;
-      // 지난달 같은 카테고리 지출 대비 증감률 — 예산 설정 여부와 상관없이 모든 카테고리에 표시
+      // 이전 기간(같은 길이) 같은 카테고리 지출 대비 증감률 — 예산 설정 여부와 상관없이 모든 카테고리에 표시
       const prevAmt=prevSpent[name]||0;
       let diffBadge='';
       if(prevAmt>0){
         const diff=amt-prevAmt,diffPct=Math.round(Math.abs(diff)/prevAmt*100);
         if(diff>0)diffBadge=` · <span style="color:var(--red);font-weight:700">▲${diffPct}%</span>`;
         else if(diff<0)diffBadge=` · <span style="color:var(--green);font-weight:700">▼${diffPct}%</span>`;
-        else diffBadge=` · <span style="color:var(--t3)">지난달과 동일</span>`;
+        else diffBadge=` · <span style="color:var(--t3)">이전 기간과 동일</span>`;
       }else{
-        diffBadge=` · <span style="color:var(--t3)">지난달엔 없음</span>`;
+        diffBadge=` · <span style="color:var(--t3)">이전 기간엔 없음</span>`;
       }
       return`<div class="tx-item" style="cursor:default"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${c.emoji}</div>
         <div class="tx-info"><div class="tx-name">${esc(name)}</div><div class="tx-meta">전체 지출의 ${pct}%${diffBadge}</div></div>
@@ -2189,7 +2293,7 @@ function renderStats(){
     }).join('');
   }
 
-  const months=[];for(let i=5;i>=0;i--)months.push(addMonths(statsAnchor,-i));
+  const months=[];for(let i=5;i>=0;i--)months.push(addMonths(PeriodStore.current.startDate,-i));
   const trendData=months.map(m=>{const r=monthRange(m);return{
     m,inc:sumAmt(incOfPeriod(r.start,r.end)),exp:sumAmt(expOfPeriod(r.start,r.end)),sav:sumAmt(savOfPeriod(r.start,r.end))
   };});
@@ -2266,6 +2370,29 @@ function openDayDetail(dateStr){
   document.getElementById('day-detail').classList.add('on');
 }
 function closeDayDetail(ev){if(!ev||ev.target.id==='day-detail')document.getElementById('day-detail').classList.remove('on');}
+
+/* 카테고리별 예산 카드를 클릭하면 (현재 조회 기간 기준) 그 카테고리의 지출/수입 내역을
+   보여준다 — 날짜별 상세와 같은 바텀시트(day-detail)를 재사용한다 */
+function openCatDetail(catId){
+  const cat=CatRepo.get().find(c=>c.id===catId);if(!cat)return;
+  const{start,end}=PeriodStore.getRange();
+  const el=expOfPeriod(start,end).filter(e=>e.category===cat.name);
+  const il=incOfPeriod(start,end).filter(e=>e.category===cat.name);
+  const exp=sumAmt(el),inc=sumAmt(il);
+  document.getElementById('dd-date').textContent=`${cat.emoji||'📦'} ${cat.name}`;
+  document.getElementById('dd-totals').innerHTML=
+    (exp>0?`<div class="dd-total" style="color:var(--red)">지출 ${fmt(exp)}</div>`:'')+
+    (inc>0?`<div class="dd-total" style="color:var(--green)">수입 ${fmt(inc)}</div>`:'');
+  let body='';
+  if(el.length){body+=`<div class="dd-section-title">지출</div><div class="tx-card">`+el.map(e=>
+    `<div class="tx-item" onclick="closeDayDetail();openEditTx('exp','${e.id}')"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${cat.emoji||'📦'}</div><div class="tx-info"><div class="tx-name">${esc(e.merchant)||'—'}</div><div class="tx-meta">${e.payment?esc(e.payment)+' · ':''}${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div><div class="tx-right"><div class="tx-amt exp">−${fmt(e.amount)}</div></div></div>`
+  ).join('')+`</div>`;}
+  if(il.length){body+=`<div class="dd-section-title">수입</div><div class="tx-card">`+il.map(e=>
+    `<div class="tx-item" onclick="closeDayDetail();openEditTx('inc','${e.id}')"><div class="tx-ico" style="background:rgba(46,139,87,.1)">💵</div><div class="tx-info"><div class="tx-name">${esc(e.source)||'—'}</div><div class="tx-meta">${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div><div class="tx-right"><div class="tx-amt inc">+${fmt(e.amount)}</div></div></div>`
+  ).join('')+`</div>`;}
+  document.getElementById('dd-body').innerHTML=body||`<div class="empty"><div class="empty-e">📋</div><div class="empty-t">이 기간엔 내역이 없어요</div></div>`;
+  document.getElementById('day-detail').classList.add('on');
+}
 
 /* ═══════════════════════════ SETTINGS ═══════════════════════════ */
 function renderSettings(){
@@ -2462,13 +2589,18 @@ function clearAll(){
   },'전체 삭제');
 }
 
-/* ═══════════════════════════ OCR ═══════════════════════════ */
+/* ═══════════════════════════ OCR ═══════════════════════════
+   하루치 지출 목록(카드 내역, 가계부 앱 캡처 등)을 한 장으로 찍으면
+   여러 줄을 각각 하나의 지출 후보로 나눠 인식한다. 자동인식은 어차피 완벽할 수 없어서
+   전부 편집 가능한 리스트로 보여주고, 사용자가 '전체 저장'을 눌러야만 실제로 반영된다. */
+let _ocrItems=[];
 function resetOcr(){
   document.getElementById('exp-ocr-zone').style.display='block';
   document.getElementById('e-ocr-prog').classList.remove('on');
   document.getElementById('e-parsed').classList.remove('on');
   document.getElementById('e-preview').innerHTML='';
   const inp=document.querySelector('#exp-ocr-zone input');if(inp)inp.value='';
+  _ocrItems=[];
 }
 async function handleImg(ev){
   const file=ev.target.files[0];if(!file)return;
@@ -2496,25 +2628,85 @@ async function handleImg(ev){
     resetOcr();setExpMode('manual');
   }
 }
+/* 한 줄에 "상호명 + 금액"이 같이 있는 형식과, 상호명 줄 다음에 금액만 있는 줄이
+   오는 2줄 형식을 모두 처리한다. 합계/승인번호 등 요약·메타 줄은 개별 지출이 아니므로 건너뛴다. */
 function parseOcrText(text){
-  const amtMatches=[...text.matchAll(/([\d][\d,]{2,})\s*원?/g)].map(m=>parseInt(m[1].replace(/,/g,''))).filter(n=>n>=100&&n<100000000);
-  const amt=amtMatches.length?Math.max(...amtMatches):null;
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const AMT_RE=/([\d][\d,]{2,})\s*원?/g;
+  const SKIP_RE=/합계|총액|총합|잔액|balance|total|카드번호|승인번호|가맹점|사업자|매장|누적/i;
   let date=null;
   const dm=text.match(/(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
-  if(dm){date=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;}
-  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  let merchant='';
+  if(dm)date=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;
+
+  const items=[];
+  let pendingMerchant=null;
   for(const line of lines){
-    const digitRatio=(line.match(/\d/g)||[]).length/line.length;
-    if(line.length>=2&&line.length<=20&&digitRatio<0.3){merchant=line;break;}
+    if(SKIP_RE.test(line))continue;
+    const amts=[...line.matchAll(AMT_RE)].map(m=>parseInt(m[1].replace(/,/g,''))).filter(n=>n>=100&&n<100000000);
+    const textOnly=line.replace(AMT_RE,'').replace(/[.\-\/:]/g,'').trim();
+    if(amts.length){
+      // 이 줄에 금액이 있음 — 같은 줄에 남는 텍스트를 상호명으로, 부족하면 직전에 보류해둔 상호명 줄을 사용
+      const amount=amts[amts.length-1];
+      let merchant=textOnly;
+      const digitRatio=(merchant.match(/\d/g)||[]).length/(merchant.length||1);
+      if((!merchant||merchant.length<2||digitRatio>0.5)&&pendingMerchant)merchant=pendingMerchant;
+      if(!merchant||merchant.length<2)merchant='항목 '+(items.length+1);
+      items.push({amount,merchant:merchant.slice(0,30),category:classify(merchant),include:true});
+      pendingMerchant=null;
+    }else{
+      // 금액 없는 줄 — 다음 줄이 금액만 있는 2줄 포맷일 수 있으니 상호명 후보로 보류
+      const digitRatio=(line.match(/\d/g)||[]).length/line.length;
+      if(line.length>=2&&line.length<=24&&digitRatio<0.3)pendingMerchant=line;
+    }
   }
+  _ocrItems=items.length?items:[{amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true}];
   document.getElementById('e-ocr-prog').classList.remove('on');
   document.getElementById('e-parsed').classList.add('on');
-  document.getElementById('ef-amt').value=amt||'';
-  document.getElementById('ef-mer').value=merchant||'';
-  buildDateSel('ef-date-wrap','ef-date',date||today_());
-  selCat.ef=merchant?classify(merchant):(CatRepo.get()[0]?.name||'기타');
-  renderChips('ef-cats',CatRepo.get(),'ef','sel-exp');
+  buildDateSel('eo-date-wrap','eo-date',date||today_());
+  renderOcrItems();
+}
+function renderOcrItems(){
+  const cats=CatRepo.get();
+  const n=_ocrItems.length;
+  document.getElementById('e-ocr-ok').textContent=ocrOkMsg(n);
+  document.getElementById('eo-items').innerHTML=_ocrItems.map((it,i)=>`
+    <div class="ocr-item-card${it.include?'':' excluded'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="checkbox" ${it.include?'checked':''} onchange="updOcrItem(${i},'include',this.checked)">
+        <input class="f-in" style="flex:1;padding:10px 12px" type="text" value="${esc(it.merchant)}" placeholder="상호명" oninput="updOcrItem(${i},'merchant',this.value)">
+        <button class="tx-del" onclick="removeOcrItem(${i})">삭제</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input class="f-in" style="flex:1;padding:10px 12px;text-align:right" type="number" min="0" inputmode="numeric" value="${it.amount||''}" placeholder="금액" oninput="updOcrItem(${i},'amount',this.value)">
+        <select class="f-in" style="flex:1;padding:10px 12px;cursor:pointer" onchange="updOcrItem(${i},'category',this.value)">
+          ${cats.map(c=>`<option value="${esc(c.name)}"${c.name===it.category?' selected':''}>${c.emoji||'📦'} ${esc(c.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`).join('');
+  document.getElementById('eo-save').textContent=`전체 저장 (${_ocrItems.filter(x=>x.include).length}건)`;
+}
+function ocrOkMsg(n){return n>1?`✅ ${n}건 인식 — 틀린 항목은 고치거나 체크를 해제한 뒤 저장하세요`:'✅ 인식 완료 — 확인 후 저장하세요';}
+function updOcrItem(i,field,val){
+  if(!_ocrItems[i])return;
+  _ocrItems[i][field]=field==='amount'?(parseInt(val)||null):val;
+  // 체크 상태만 카드 스타일·저장 버튼 카운트에 영향을 주므로 그때만 리렌더 —
+  // 금액/상호명 입력 중 매 글자마다 리렌더하면 입력 포커스가 날아간다
+  if(field==='include')renderOcrItems();
+}
+function removeOcrItem(i){_ocrItems.splice(i,1);renderOcrItems();}
+function addOcrItem(){_ocrItems.push({amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true});renderOcrItems();}
+function saveOcrItems(){
+  const date=getDateStr('eo-date');
+  const toSave=_ocrItems.filter(x=>x.include);
+  if(!toSave.length){showToast('⚠️ 저장할 항목이 없어요');return;}
+  const bad=toSave.some(x=>!x.amount||x.amount<=0||!x.merchant.trim());
+  if(bad){showToast('⚠️ 금액 또는 상호명이 비어있는 항목이 있어요');return;}
+  toSave.forEach(it=>{
+    ExpRepo.add({id:uid(),amount:it.amount,merchant:it.merchant.trim(),category:it.category,date,payment:'카드',memo:'',createdAt:new Date().toISOString()});
+  });
+  showToast(`✅ ${toSave.length}건 저장 완료!`);
+  resetOcr();
+  navTo('home');
 }
 
 /* ═══════════════════════════ APP LOCK (PIN) ═══════════════════════════
