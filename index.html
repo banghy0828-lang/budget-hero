@@ -651,7 +651,6 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       <div class="parsed-form" id="e-parsed">
         <div id="e-preview"></div>
         <div class="ocr-ok" id="e-ocr-ok">✅ 인식 완료 — 확인 후 저장하세요</div>
-        <div class="field"><div class="f-lbl">날짜 (전체 항목 공통)</div><div class="date-sel-wrap" id="eo-date-wrap"></div></div>
         <div id="eo-items"></div>
         <button style="width:100%;background:var(--card2);border:1px dashed var(--line);border-radius:var(--r-md);padding:12px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;margin-bottom:16px" onclick="addOcrItem()">＋ 항목 직접 추가</button>
         <button class="save-btn exp-btn" id="eo-save" onclick="saveOcrItems()">전체 저장</button>
@@ -827,25 +826,23 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       </div>
     </div>
     <div style="font-size:12px;color:var(--t3);line-height:1.65;margin-bottom:14px">
-      Firebase 설정 값을 입력하면 PC ↔ 아이폰 실시간 동기화가 활성화됩니다.<br>
-      <a href="https://console.firebase.google.com" target="_blank" style="color:var(--purple);font-weight:600">Firebase 콘솔</a>에서 프로젝트를 생성 후 아래에 입력하세요.
+      켜두면 이 기기가 인터넷에 연결될 때마다 자동으로 데이터가 클라우드에 저장되고, 로컬 데이터가 지워져도 복구할 수 있어요. 2단계면 충분합니다:<br>
+      ① <a href="https://console.firebase.google.com" target="_blank" style="color:var(--purple);font-weight:600">Firebase 콘솔</a>에서 프로젝트 생성 → "웹 앱 추가" → 나오는 코드 전체 복사<br>
+      ② 아래에 통째로 붙여넣고, 동기화 코드(아무 문자열이나 OK, 여러 기기를 묶을 땐 똑같이 입력)를 정하기만 하면 끝
     </div>
     <div style="display:flex;flex-direction:column;gap:8px">
-      <input id="fb-api-key"      class="f-in" type="text"  placeholder="apiKey"            style="font-size:12px;padding:10px 12px;font-family:monospace">
-      <input id="fb-project-id"   class="f-in" type="text"  placeholder="projectId"         style="font-size:12px;padding:10px 12px;font-family:monospace">
-      <input id="fb-app-id"       class="f-in" type="text"  placeholder="appId"             style="font-size:12px;padding:10px 12px;font-family:monospace">
-      <input id="fb-user-id"      class="f-in" type="text"  placeholder="사용자 ID (영문, 내 기기 식별자)" style="font-size:12px;padding:10px 12px">
+      <textarea id="fb-config-paste" class="f-in" placeholder="여기에 firebaseConfig 코드 전체를 붙여넣으세요&#10;(const firebaseConfig = { apiKey: ... } 통째로 OK)" style="font-size:12px;padding:10px 12px;font-family:monospace;min-height:88px;resize:vertical"></textarea>
+      <input id="fb-user-id" class="f-in" type="text" placeholder="동기화 코드 (예: myhome2024 — 다른 기기에도 똑같이 입력)" style="font-size:12px;padding:10px 12px">
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="saveFirebaseConfig()" style="flex:1;padding:11px;background:var(--purple);border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--on-color);cursor:pointer;font-family:inherit">연결</button>
       <button onclick="disconnectFirebase()" style="flex:1;padding:11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;font-family:inherit">연결 해제</button>
     </div>
     <div style="margin-top:12px;font-size:11px;color:var(--t3);line-height:1.6">
-      🔒 입력한 Firebase 키는 이 기기의 localStorage에만 저장됩니다.<br>
-      📱 아이폰 PWA 설치 후 동일한 userId로 연결하면 자동 동기화됩니다.<br>
+      🔒 붙여넣은 내용은 이 기기의 localStorage에만 저장됩니다.<br>
       🔐 앱이 자동으로 익명 로그인을 시도합니다. Firebase 콘솔 → Firestore → 규칙(Rules)에 아래를 꼭 추가하세요:<br>
       <code style="display:block;margin-top:6px;padding:8px;white-space:pre-wrap">allow read, write: if request.auth != null;</code>
-      이 규칙이 없으면 로그인 여부와 상관없이 apiKey만 알아도 데이터에 접근할 수 있습니다.
+      이 규칙이 없으면 로그인 여부와 상관없이 설정값만 알아도 데이터에 접근할 수 있습니다.
     </div>
   </div>
 
@@ -1231,20 +1228,28 @@ function detachAllListeners() {
 }
 
 /* Firebase 설정 저장/불러오기 */
+/* Firebase 콘솔의 "웹 앱 추가" 화면에 나오는 firebaseConfig 코드를 통째로 붙여넣으면
+   apiKey/projectId/appId를 알아서 뽑아낸다 — 필드 3개를 따로 입력할 필요가 없게 하려는 목적 */
+function parseFirebaseConfigPaste(text){
+  const pick=(key)=>{
+    const m=text.match(new RegExp(key+'["\']?\\s*:\\s*["\']([^"\']+)["\']'));
+    return m?m[1]:'';
+  };
+  return{apiKey:pick('apiKey'),projectId:pick('projectId'),appId:pick('appId')};
+}
 function saveFirebaseConfig() {
-  const apiKey    = document.getElementById('fb-api-key').value.trim();
-  const projectId = document.getElementById('fb-project-id').value.trim();
-  const appId     = document.getElementById('fb-app-id').value.trim();
-  const userId    = document.getElementById('fb-user-id').value.trim();
-  if (!apiKey || !projectId || !appId || !userId) {
-    showToast('⚠️ 모든 항목을 입력해주세요'); return;
+  const pasted = document.getElementById('fb-config-paste').value.trim();
+  const userId = document.getElementById('fb-user-id').value.trim();
+  const parsed = parseFirebaseConfigPaste(pasted);
+  if (!parsed.apiKey || !parsed.projectId || !parsed.appId || !userId) {
+    showToast('⚠️ Firebase 설정 코드를 통째로 붙여넣고, 동기화 코드도 입력해주세요'); return;
   }
   const config = {
-    apiKey,
-    authDomain: `${projectId}.firebaseapp.com`,
-    projectId,
-    storageBucket: `${projectId}.appspot.com`,
-    appId
+    apiKey: parsed.apiKey,
+    authDomain: `${parsed.projectId}.firebaseapp.com`,
+    projectId: parsed.projectId,
+    storageBucket: `${parsed.projectId}.appspot.com`,
+    appId: parsed.appId
   };
   localStorage.setItem('bh2_firebase_config', JSON.stringify(config));
   localStorage.setItem('bh2_firebase_userid', userId);
@@ -1304,9 +1309,7 @@ function tryAutoConnectFirebase() {
     const userId = localStorage.getItem('bh2_firebase_userid');
     if (config && userId) {
       // 폼에 값 복원
-      document.getElementById('fb-api-key').value    = config.apiKey    || '';
-      document.getElementById('fb-project-id').value = config.projectId || '';
-      document.getElementById('fb-app-id').value     = config.appId     || '';
+      document.getElementById('fb-config-paste').value = JSON.stringify(config, null, 2);
       document.getElementById('fb-user-id').value    = userId;
       const ok = initFirebase(config, userId);
       if (ok) { startRealtimeSync(); updateFirebaseStatusUI(true); }
@@ -1413,6 +1416,47 @@ const SubRepo={
   update(id,p){const a=this.all();const i=a.findIndex(s=>s.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a)}},
   del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)}
 };
+/* ═══════════════════════════ SHADOW BACKUP ═══════════════════════════
+   로컬 저장 모드(클라우드 미연결)에서도 최소한의 안전망을 두기 위한 이중 저장.
+   실제 데이터 키(bh2_exp 등)와는 별개의 키(bh2_shadow)에 스냅샷을 주기적으로 남겨두고,
+   앱을 열었을 때 '진짜 데이터는 비어있는데 스냅샷엔 있었다'면 원인을 몰라도 복구부터 제안한다. */
+const ShadowBackup={
+  _k:'bh2_shadow',
+  save(){
+    try{
+      const exp=ExpRepo.all(),inc=IncRepo.all(),sav=SavRepo.all();
+      // 지금 상태가 통째로 비어있는데 기존 백업엔 데이터가 있었다면 백업을 빈 값으로 덮어쓰지 않는다
+      // (checkForDataLoss가 복구를 물어보는 도중에 이 save()가 먼저 실행돼 백업 자체를 지워버리는 걸 방지.
+      //  사용자가 실제로 '전체 삭제'를 누른 경우는 clearAll()에서 백업도 함께 지운다)
+      if(!exp.length&&!inc.length&&!sav.length){
+        const prev=this.get();
+        if(prev&&((prev.exp&&prev.exp.length)||(prev.inc&&prev.inc.length)||(prev.sav&&prev.sav.length)))return;
+      }
+      const snap={exp,inc,sav,cats:CatRepo.get(),goals:GoalRepo.all(),subs:SubRepo.all(),savedAt:new Date().toISOString()};
+      localStorage.setItem(this._k,JSON.stringify(snap));
+    }catch(e){}
+  },
+  clear(){localStorage.removeItem(this._k)},
+  get(){try{return JSON.parse(localStorage.getItem(this._k)||'null')}catch{return null}}
+};
+function checkForDataLoss(){
+  const hasNow=ExpRepo.all().length||IncRepo.all().length||SavRepo.all().length;
+  if(hasNow)return; // 지금 데이터가 있으면 아무 문제 없음
+  const snap=ShadowBackup.get();if(!snap)return;
+  const hadData=(snap.exp&&snap.exp.length)||(snap.inc&&snap.inc.length)||(snap.sav&&snap.sav.length);
+  if(!hadData)return;
+  const when=snap.savedAt?new Date(snap.savedAt).toLocaleString('ko-KR'):'알 수 없음';
+  showConfirm('이전 기록이 갑자기 비어있어요','자동으로 남겨둔 백업본이 있어요 (마지막 저장: '+when+'). 지금 복구할까요?',()=>{
+    if(snap.exp)ExpRepo.save(snap.exp);
+    if(snap.inc)IncRepo.save(snap.inc);
+    if(snap.sav)SavRepo.save(snap.sav);
+    if(snap.cats)CatRepo.save(snap.cats);
+    if(snap.goals)GoalRepo.save(snap.goals);
+    if(snap.subs)SubRepo.save(snap.subs);
+    showToast('✅ 복구됐어요');
+    renderHome();
+  },'복구');
+}
 /* 상호명 → 카테고리 학습 규칙. 카테고리 이름이 아니라 id로 저장해서
    나중에 그 카테고리 이름을 바꿔도 학습된 규칙이 계속 유효하게 유지된다. */
 const LearnedRepo={
@@ -1701,6 +1745,7 @@ function renderHome(){
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
   renderRecent('h-rec-sav',sl.slice(0,4),'sav');
   renderHomeSubBadge();
+  ShadowBackup.save();
 }
 /* 설정 안에 묻혀서 존재 자체를 모르기 쉬운 구독 관리를, 등록된 구독이 있을 때만
    홈 화면에 짧게 노출해서 존재를 알리고 설정으로 바로 연결한다 */
@@ -2678,6 +2723,7 @@ function renderBackupReminder(){
 function clearAll(){
   showConfirm('전체 데이터를 삭제할까요?','지출, 수입, 저축, 목표, 카테고리 설정이 모두 삭제되며 되돌릴 수 없습니다.',()=>{
     ['bh2_exp','bh2_inc','bh2_sav','bh2_cats','bh2_goals','bh2_subs','bh2_learned'].forEach(k=>localStorage.removeItem(k));
+    ShadowBackup.clear();
     if(_db){['expenses','income','saving','cats','goals','subs'].forEach(c=>cloudClearAll(c));}
     showToast('🗑 전체 삭제됐어요');
     navTo('home');
@@ -2726,21 +2772,43 @@ async function handleImg(ev){
 /* 한 줄에 "상호명 + 금액"이 같이 있는 형식과, 상호명 줄 다음에 금액만 있는 줄이
    오는 2줄 형식을 모두 처리한다. 합계/승인번호 등 요약·메타 줄은 개별 항목이 아니므로 건너뛴다.
    은행 앱 캡처는 지출뿐 아니라 입금(수입) 내역도 같이 찍히는 경우가 많아서, 줄마다 금액 앞의
-   부호(+/-)나 '입금/출금' 같은 키워드로 수입인지 지출인지도 함께 추정한다. */
+   부호(+/-)나 '입금/출금' 같은 키워드로 수입인지 지출인지도 함께 추정한다.
+   은행 앱 내역 캡처는 보통 한 건이 "상호명 + 금액" 줄과, 그 밑에 "시각 + 결제수단 + 거래 후 잔액"
+   줄, 이렇게 두 줄이 짝을 이룬다. 잔액 줄의 숫자를 별개의 거래로 잘못 인식하면 금액이 완전히
+   틀어지므로, 시각(HH:MM) 패턴이 있는 줄은 거래가 아니라 이 잔액 줄로 보고 통째로 건너뛴다.
+   날짜도 "08.04"처럼 날짜별 구간 헤더로 나오는 경우가 많아, 헤더를 만날 때마다 그 아래
+   항목들의 날짜를 갱신한다(항목마다 날짜가 다를 수 있어 전체 공통 날짜 입력칸은 없앴다). */
 const OCR_INC_RE=/입금|수입|급여|월급|이체받음|환급|입금액/;
 const OCR_EXP_RE=/출금|지출|승인|결제|출금액|이체$/;
+const OCR_TIME_RE=/\d{1,2}:\d{2}/;
+const OCR_DATE_HDR_RE=/^(\d{1,2})[.\-\/](\d{1,2})(?:[.\-\/]|\s|$)/;
+function ocrInferYear(mm,dd){
+  const now=new Date();
+  let year=now.getFullYear();
+  if(new Date(year,mm-1,dd)>now)year-=1; // 미래 날짜면 작년 표기로 간주 (연말/연초 캡처 대비)
+  return year;
+}
 function parseOcrText(text){
   const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
   const AMT_RE=/([+\-−]?)\s*([\d][\d,]{2,})\s*원?/g;
   const SKIP_RE=/합계|총액|총합|잔액|balance|total|카드번호|승인번호|가맹점|사업자|매장|누적/i;
-  let date=null;
+  let curDate=today_();
   const dm=text.match(/(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
-  if(dm)date=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;
+  if(dm)curDate=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;
 
   const items=[];
   let pendingMerchant=null;
   for(const line of lines){
     if(SKIP_RE.test(line))continue;
+    if(OCR_TIME_RE.test(line))continue; // 시각+결제수단+잔액 줄 — 거래 항목이 아니므로 건너뜀
+    const hdr=line.match(OCR_DATE_HDR_RE);
+    if(hdr&&line.replace(OCR_DATE_HDR_RE,'').trim().length<6){
+      // 순수 날짜 구간 헤더(뒤에 요일 정도만 붙는 짧은 줄)로 판단 — 이후 항목의 날짜를 갱신하고 넘어감
+      const mm=parseInt(hdr[1]),dd=parseInt(hdr[2]);
+      curDate=`${ocrInferYear(mm,dd)}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+      pendingMerchant=null;
+      continue;
+    }
     const raw=[...line.matchAll(AMT_RE)].filter(m=>parseInt(m[2].replace(/,/g,''))>=100&&parseInt(m[2].replace(/,/g,''))<100000000);
     const textOnly=line.replace(AMT_RE,'').replace(/[.\-\/:]/g,'').trim();
     if(raw.length){
@@ -2759,6 +2827,7 @@ function parseOcrText(text){
         amount,
         merchant:merchant.slice(0,30),
         category:type==='inc'?(INC_CATS[0]?.name||'기타 수입'):classify(merchant),
+        date:curDate,
         include:true
       });
       pendingMerchant=null;
@@ -2768,10 +2837,9 @@ function parseOcrText(text){
       if(line.length>=2&&line.length<=24&&digitRatio<0.3)pendingMerchant=line;
     }
   }
-  _ocrItems=items.length?items:[{type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true}];
+  _ocrItems=items.length?items:[{type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',date:curDate,include:true}];
   document.getElementById('e-ocr-prog').classList.remove('on');
   document.getElementById('e-parsed').classList.add('on');
-  buildDateSel('eo-date-wrap','eo-date',date||today_());
   renderOcrItems();
 }
 function ocrCatsFor(type){return type==='inc'?INC_CATS:CatRepo.get();}
@@ -2791,12 +2859,13 @@ function renderOcrItems(){
         <div class="pc${it.type==='exp'?' sel':''}" style="flex:1;text-align:center" onclick="updOcrItem(${i},'type','exp')">지출</div>
         <div class="pc${it.type==='inc'?' sel':''}" style="flex:1;text-align:center;${it.type==='inc'?'border-color:var(--green);color:var(--green);background:rgba(46,139,87,.09)':''}" onclick="updOcrItem(${i},'type','inc')">수입</div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <input class="f-in" style="flex:1;padding:10px 12px;text-align:right" type="number" min="0" inputmode="numeric" value="${it.amount||''}" placeholder="금액" oninput="updOcrItem(${i},'amount',this.value)">
         <select class="f-in" style="flex:1;padding:10px 12px;cursor:pointer" onchange="updOcrItem(${i},'category',this.value)">
           ${cats.map(c=>`<option value="${esc(c.name)}"${c.name===it.category?' selected':''}>${c.emoji||'📦'} ${esc(c.name)}</option>`).join('')}
         </select>
       </div>
+      <input class="f-in" style="width:100%;padding:8px 12px;font-size:13px" type="date" value="${it.date||today_()}" onchange="updOcrItem(${i},'date',this.value)">
     </div>`;
   }).join('');
   document.getElementById('eo-save').textContent=`전체 저장 (${_ocrItems.filter(x=>x.include).length}건)`;
@@ -2816,15 +2885,15 @@ function updOcrItem(i,field,val){
   if(field==='include'||field==='type')renderOcrItems();
 }
 function removeOcrItem(i){_ocrItems.splice(i,1);renderOcrItems();}
-function addOcrItem(){_ocrItems.push({type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true});renderOcrItems();}
+function addOcrItem(){_ocrItems.push({type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',date:today_(),include:true});renderOcrItems();}
 function saveOcrItems(){
-  const date=getDateStr('eo-date');
   const toSave=_ocrItems.filter(x=>x.include);
   if(!toSave.length){showToast('⚠️ 저장할 항목이 없어요');return;}
   const bad=toSave.some(x=>!x.amount||x.amount<=0||!x.merchant.trim());
   if(bad){showToast('⚠️ 금액 또는 상호명이 비어있는 항목이 있어요');return;}
   let expN=0,incN=0;
   toSave.forEach(it=>{
+    const date=it.date||today_();
     if(it.type==='inc'){
       IncRepo.add({id:uid(),amount:it.amount,source:it.merchant.trim(),category:it.category,date,memo:'',createdAt:new Date().toISOString()});
       incN++;
@@ -2978,6 +3047,7 @@ function renderLockSettingStatus(){
 document.addEventListener('DOMContentLoaded',()=>{
   PeriodStore.load();
   tryAutoConnectFirebase();
+  checkForDataLoss();
   renderHome();
   initLockScreen();
 });
