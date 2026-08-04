@@ -377,6 +377,11 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .sim-in{flex:1;background:var(--card2);border:1.5px solid var(--line);border-radius:var(--r-sm);padding:9px 12px;font-size:14px;font-weight:700;color:var(--t1);font-family:inherit;outline:none;text-align:right;transition:border-color .2s}
 .sim-in:focus{border-color:var(--purple)}
 .sim-result{background:rgba(212,148,31,.08);border:1px solid rgba(212,148,31,.18);border-radius:var(--r-sm);padding:12px 16px;font-size:13px;color:var(--purp2);font-weight:600;line-height:1.7;display:none}
+.reco-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:12px}
+.reco-ico{font-size:20px;margin-bottom:8px}
+.reco-txt{font-size:13.5px;color:var(--t1);line-height:1.7;font-weight:500}
+.reco-txt strong{color:var(--purp2)}
+.reco-sub{font-size:11.5px;color:var(--t3);margin-top:8px;line-height:1.6}
 .sim-result.on{display:block}
 
 /* goal add form */
@@ -601,15 +606,15 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div style="font-size:38px;font-weight:900;color:var(--t1);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums" id="h-total-asset">₩0</div>
     <div style="font-size:12px;color:var(--t3);margin-top:6px">누적 수입 − 누적 지출 (저축은 자산)</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;padding-top:14px;border-top:1px solid var(--line2)">
-      <div style="text-align:center">
+      <div style="text-align:center;cursor:pointer" onclick="navTo('hist-inc')">
         <div style="font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.04em;margin-bottom:4px">이번달 수입</div>
         <div style="font-size:15px;font-weight:800;color:var(--t1)" id="h-inc">₩0</div>
       </div>
-      <div style="text-align:center;border-left:1px solid var(--line2);border-right:1px solid var(--line2)">
+      <div style="text-align:center;border-left:1px solid var(--line2);border-right:1px solid var(--line2);cursor:pointer" onclick="navTo('hist-exp')">
         <div style="font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.04em;margin-bottom:4px">이번달 지출</div>
         <div style="font-size:15px;font-weight:800;color:var(--t1)" id="h-exp">₩0</div>
       </div>
-      <div style="text-align:center">
+      <div style="text-align:center;cursor:pointer" onclick="navTo('hist-sav')">
         <div style="font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.04em;margin-bottom:4px">이번달 저축</div>
         <div style="font-size:15px;font-weight:800;color:var(--t1)" id="h-sav">₩0</div>
       </div>
@@ -618,6 +623,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 
   <div class="insight" id="insight-pill">오늘도 현명한 소비를 기록해 보세요.</div>
   <div class="period-badge" id="home-period-badge" style="margin:0 22px 20px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px"></div>
+  <div id="home-sub-badge"></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">카테고리별 예산</div><div class="sec-link" onclick="navTo('settings')">설정</div></div><div id="home-cat-prog"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 지출</div><div class="sec-link" onclick="navTo('hist-exp')">전체</div></div><div class="tx-card" id="h-rec-exp"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 수입</div><div class="sec-link" onclick="navTo('hist-inc')">전체</div></div><div class="tx-card" id="h-rec-inc"></div></div>
@@ -636,10 +642,10 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <!-- OCR -->
     <div id="exp-ocr-wrap">
       <div class="ocr-zone" id="exp-ocr-zone">
-        <input type="file" accept="image/*" capture="environment" onchange="handleImg(event)">
-        <div class="ocr-ico">📸</div><div class="ocr-ttl">지출 목록 캡처 업로드</div>
-        <div class="ocr-sub">그날 쓴 내역 전체를 한 장에 캡처하면<br>여러 건이어도 자동으로 나눠 인식해요</div>
-        <div class="ocr-tags"><span class="ocr-tag">카드 내역</span><span class="ocr-tag">가계부 캡처</span><span class="ocr-tag">카카오페이</span><span class="ocr-tag">토스</span></div>
+        <input type="file" accept="image/*" onchange="handleImg(event)">
+        <div class="ocr-ico">🖼</div><div class="ocr-ttl">사진첩에서 캡처본 선택</div>
+        <div class="ocr-sub">은행·카드 앱에서 지출/입금 내역을 캡처해 올리면<br>여러 건이어도 자동으로 나눠 인식해요 (수입도 인식돼요)</div>
+        <div class="ocr-tags"><span class="ocr-tag">은행 앱 캡처</span><span class="ocr-tag">카드 내역</span><span class="ocr-tag">카카오페이</span><span class="ocr-tag">토스</span></div>
       </div>
       <div class="ocr-prog" id="e-ocr-prog"><div class="spin"></div><div class="prog-lbl" id="e-prog-lbl">처리 중...</div><div class="prog-sub" id="e-prog-sub">텍스트 인식 중</div><div class="prog-bar-wrap"><div class="prog-bar" id="e-prog-bar" style="width:0%"></div></div></div>
       <div class="parsed-form" id="e-parsed">
@@ -760,7 +766,8 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     </div>
   </div>
 
-  <div class="sec" style="margin-bottom:0"><div class="sec-hdr"><div class="sec-title">목표 진행률</div></div><div id="goals-list"></div></div>
+  <div class="sec"><div class="sec-hdr"><div class="sec-title">목표 진행률</div></div><div id="goals-list"></div></div>
+  <div class="sec" style="margin-bottom:0"><div class="sec-hdr"><div class="sec-title">추천</div></div><div id="goal-reco"></div></div>
 </div>
 
 <!-- ═══ STATS ═══ -->
@@ -878,6 +885,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   </div>
   <div class="s-card">
     <div class="s-title">📺 구독 관리</div>
+    <div style="font-size:12px;color:var(--t3);line-height:1.6;margin:-6px 0 14px">넷플릭스처럼 매달 나가는 결제를 등록해두면, '구독료' 카테고리로 지출을 기록할 때마다 자동으로 알아보고 이번 달 결제 여부를 표시해줘요. 매번 다시 입력할 필요가 없어요.</div>
 
     <!-- 월 합계 배지 -->
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:16px">
@@ -1426,7 +1434,14 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function norm(s){return(s||'').trim().toLowerCase()}
 function today_(){return new Date().toISOString().split('T')[0]}
 function fmt(n){return'₩'+(n||0).toLocaleString()}
-function fmtShort(n){if(n>=10000)return(Math.round(n/1000))+'K';return n.toLocaleString()}
+/* 달력 칸처럼 좁은 공간엔 'K'(천 단위, 영어권 표기) 대신 원화에 익숙한 '만원' 단위로 표시 */
+function fmtShort(n){
+  if(n>=10000){
+    const man=Math.round(n/1000)/10; // 소수 첫째 자리까지
+    return(Number.isInteger(man)?man:man.toFixed(1))+'만';
+  }
+  return n.toLocaleString();
+}
 function fmtD(d){if(!d)return'';const dt=new Date(d+'T00:00:00');return`${dt.getMonth()+1}/${dt.getDate()}`}
 function sumAmt(arr){return arr.reduce((s,e)=>s+(e.amount||0),0)}
 
@@ -1685,6 +1700,26 @@ function renderHome(){
   renderRecent('h-rec-exp',el.slice(0,4),'exp');
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
   renderRecent('h-rec-sav',sl.slice(0,4),'sav');
+  renderHomeSubBadge();
+}
+/* 설정 안에 묻혀서 존재 자체를 모르기 쉬운 구독 관리를, 등록된 구독이 있을 때만
+   홈 화면에 짧게 노출해서 존재를 알리고 설정으로 바로 연결한다 */
+function renderHomeSubBadge(){
+  const el=document.getElementById('home-sub-badge');if(!el)return;
+  const subs=SubRepo.all();
+  if(!subs.length){el.innerHTML='';return;}
+  const totalM=subs.reduce((s,x)=>s+(x.price||0),0);
+  const curYm=today_().slice(0,7);
+  const paidCnt=subs.filter(s=>s.lastPaidMonth===curYm).length;
+  el.innerHTML=`<div class="sec" style="cursor:pointer" onclick="navTo('settings')">
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:18px">📺</div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--t2)">등록된 구독 ${subs.length}개 · 이번달 ${paidCnt}건 결제완료</div><div style="font-size:11px;color:var(--t3);margin-top:2px">관리하려면 탭하세요</div></div>
+      </div>
+      <div style="font-size:15px;font-weight:800">${fmt(totalM)}<span style="font-size:10px;color:var(--t3);font-weight:600">/월</span></div>
+    </div>
+  </div>`;
 }
 
 /* Period badge shown at top of Home & Stats — shows active range + change button */
@@ -2189,8 +2224,57 @@ function renderGoalsPage(){
   }).join('');
 
   const gl=document.getElementById('goals-list');
-  if(!goals.length){gl.innerHTML=`<div class="empty"><div class="empty-e">🎯</div><div class="empty-t">목표가 없어요</div><div class="empty-s">우측 상단 ＋ 버튼으로 저축 목표를 추가해 보세요</div></div>`;return;}
+  if(!goals.length){
+    gl.innerHTML=`<div class="empty"><div class="empty-e">🎯</div><div class="empty-t">목표가 없어요</div><div class="empty-s">우측 상단 ＋ 버튼으로 저축 목표를 추가해 보세요</div></div>`;
+    document.getElementById('goal-reco').innerHTML='';
+    return;
+  }
   gl.innerHTML=goals.map(g=>buildGoalCard(g)).join('');
+  renderGoalRecommendation(goals);
+}
+/* 이번 기간 지출 중 예산 대비 가장 많이 초과했거나(예산 미설정이면 가장 많이 쓴) 카테고리를
+   짚어주고, 거기서 얼마를 줄이면 저축 목표 달성이 몇 개월 당겨지는지 보여준다.
+   '월 저축액'을 입력해둔 목표가 있어야 개월 수 계산이 가능하다 — 없으면 절약 팁만 보여준다. */
+function renderGoalRecommendation(goals){
+  const el=document.getElementById('goal-reco');if(!el)return;
+  const{start,end}=PeriodStore.getRange();
+  const cats=CatRepo.get();
+  const spent={};
+  expOfPeriod(start,end).forEach(e=>spent[e.category]=(spent[e.category]||0)+e.amount);
+  let best=null; // {cat, spend, over}
+  cats.forEach(c=>{
+    const spend=spent[c.name]||0;if(spend<=0)return;
+    const over=(c.budget>0)?spend-c.budget:0;
+    if(!best||over>best.over||(over===best.over&&spend>best.spend))best={cat:c,spend,over};
+  });
+  if(!best){el.innerHTML=`<div class="empty"><div class="empty-e">💡</div><div class="empty-t">아직 추천할 내용이 없어요</div><div class="empty-s">지출 내역이 쌓이면 절약 포인트를 짚어드릴게요</div></div>`;return;}
+  const{cat,spend,over}=best;
+  const cut=over>0?over:Math.max(1000,Math.round(spend*0.15));
+  const overText=over>0?`예산보다 <strong>${fmt(over)}</strong> 더 썼어요`:`이번 기간 가장 많이 쓴 카테고리예요`;
+
+  const withPlan=goals.filter(g=>!((g.target||0)>0&&(g.current||0)>=(g.target||0))&&(g.monthlyPlan||0)>0);
+  let goalLine='';
+  if(withPlan.length){
+    let bestGoal=null; // {g, diff}
+    withPlan.forEach(g=>{
+      const left=Math.max(0,(g.target||0)-(g.current||0));
+      const nowM=Math.ceil(left/g.monthlyPlan);
+      const boostedM=Math.ceil(left/(g.monthlyPlan+cut));
+      const diff=nowM-boostedM;
+      if(!bestGoal||diff>bestGoal.diff)bestGoal={g,diff};
+    });
+    if(bestGoal&&bestGoal.diff>0){
+      goalLine=`<strong>'${esc(bestGoal.g.name)}'</strong> 목표를 약 <strong>${bestGoal.diff}개월</strong> 더 빨리 달성할 수 있어요.`;
+    }
+  }
+  const sub=withPlan.length
+    ?(goalLine?'':'지금 속도로는 개월 수 차이가 크지 않지만, 꾸준히 줄이면 도움이 돼요.')
+    :'목표 카드의 "달성 시뮬레이터"에 월 저축액을 입력해두면, 여기서 몇 개월 당겨지는지도 보여드려요.';
+  el.innerHTML=`<div class="reco-card">
+    <div class="reco-ico">${cat.emoji||'📦'}</div>
+    <div class="reco-txt"><strong>${esc(cat.name)}</strong>에서 ${overText}. 월 <strong>${fmt(cut)}</strong>만 줄여보면 어떨까요?${goalLine?' '+goalLine:''}</div>
+    ${sub?`<div class="reco-sub">${sub}</div>`:''}
+  </div>`;
 }
 function buildGoalCard(g){
   const cur=g.current||0,tgt=g.target||0;
@@ -2207,6 +2291,7 @@ function buildGoalCard(g){
   if(done)insight=`목표를 <strong>달성</strong>했어요! 🎉`;
   else if(monthsLeft)insight=`이 속도로 저축하면 약 <strong>${monthsLeft}개월</strong> 후 목표를 달성해요.`;
   else insight=`아직 이 목표로 연결된 저축 내역이 없어요.`;
+  const simText=(!done&&g.monthlyPlan>0)?simGoalText(g.monthlyPlan,left):'';
   return`<div class="goal-card">
     <div class="gc-hdr">
       <div><div class="gc-title">${g.emoji||'🎯'} ${esc(g.name)}</div><div class="gc-sub">${esc(g.memo)}</div></div>
@@ -2222,20 +2307,30 @@ function buildGoalCard(g){
     <div class="gc-insight">${insight}</div>
     <div class="sim-wrap">
       <div class="sim-ttl">달성 시뮬레이터</div>
-      <div class="sim-row"><div class="sim-lbl">월 저축액</div><input class="sim-in" type="number" placeholder="0" min="0" inputmode="numeric" oninput="simGoal('${g.id}',this.value)"></div>
-      <div class="sim-result" id="sim-result-${g.id}"></div>
+      <div class="sim-row"><div class="sim-lbl">월 저축액</div><input class="sim-in" type="number" placeholder="0" min="0" inputmode="numeric" value="${g.monthlyPlan||''}" oninput="simGoal('${g.id}',this.value)" onchange="saveSimGoalPlan('${g.id}',this.value)"></div>
+      <div class="sim-result${simText?' on':''}" id="sim-result-${g.id}">${simText}</div>
     </div>
   </div>`;
 }
+/* 입력창에 값이 남아있어야(=저장돼 있어야) 목표 화면을 다시 열 때마다 매번 새로 입력하지
+   않아도 시뮬레이션 결과가 계속 보인다. 미리보기(simGoal)와 저장(saveSimGoalPlan)을 분리해서
+   타이핑 중엔 즉시 반응하고, 값이 확정(blur/change)됐을 때만 실제로 저장한다. */
 function simGoal(id,val){
   const g=GoalRepo.all().find(x=>x.id===id);if(!g)return;
   const m=parseInt(val);const box=document.getElementById('sim-result-'+id);
   const left=Math.max(0,(g.target||0)-(g.current||0));
-  if(!m||m<=0){box.classList.remove('on');return;}
+  if(!m||m<=0){box.classList.remove('on');box.textContent='';return;}
+  box.textContent=simGoalText(m,left);
+  box.classList.add('on');
+}
+function simGoalText(m,left){
   const months=Math.ceil(left/m);
   const d=new Date();d.setMonth(d.getMonth()+months);
-  box.textContent=`월 ${fmt(m)}씩 저축하면 약 ${months}개월 후 (${d.getFullYear()}년 ${d.getMonth()+1}월경) 목표를 달성해요.`;
-  box.classList.add('on');
+  return`월 ${fmt(m)}씩 저축하면 약 ${months}개월 후 (${d.getFullYear()}년 ${d.getMonth()+1}월경) 목표를 달성해요.`;
+}
+function saveSimGoalPlan(id,val){
+  const m=parseInt(val);
+  GoalRepo.update(id,{monthlyPlan:m>0?m:null});
 }
 
 /* ═══════════════════════════ STATS / CALENDAR ═══════════════════════════
@@ -2629,10 +2724,14 @@ async function handleImg(ev){
   }
 }
 /* 한 줄에 "상호명 + 금액"이 같이 있는 형식과, 상호명 줄 다음에 금액만 있는 줄이
-   오는 2줄 형식을 모두 처리한다. 합계/승인번호 등 요약·메타 줄은 개별 지출이 아니므로 건너뛴다. */
+   오는 2줄 형식을 모두 처리한다. 합계/승인번호 등 요약·메타 줄은 개별 항목이 아니므로 건너뛴다.
+   은행 앱 캡처는 지출뿐 아니라 입금(수입) 내역도 같이 찍히는 경우가 많아서, 줄마다 금액 앞의
+   부호(+/-)나 '입금/출금' 같은 키워드로 수입인지 지출인지도 함께 추정한다. */
+const OCR_INC_RE=/입금|수입|급여|월급|이체받음|환급|입금액/;
+const OCR_EXP_RE=/출금|지출|승인|결제|출금액|이체$/;
 function parseOcrText(text){
   const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const AMT_RE=/([\d][\d,]{2,})\s*원?/g;
+  const AMT_RE=/([+\-−]?)\s*([\d][\d,]{2,})\s*원?/g;
   const SKIP_RE=/합계|총액|총합|잔액|balance|total|카드번호|승인번호|가맹점|사업자|매장|누적/i;
   let date=null;
   const dm=text.match(/(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
@@ -2642,16 +2741,26 @@ function parseOcrText(text){
   let pendingMerchant=null;
   for(const line of lines){
     if(SKIP_RE.test(line))continue;
-    const amts=[...line.matchAll(AMT_RE)].map(m=>parseInt(m[1].replace(/,/g,''))).filter(n=>n>=100&&n<100000000);
+    const raw=[...line.matchAll(AMT_RE)].filter(m=>parseInt(m[2].replace(/,/g,''))>=100&&parseInt(m[2].replace(/,/g,''))<100000000);
     const textOnly=line.replace(AMT_RE,'').replace(/[.\-\/:]/g,'').trim();
-    if(amts.length){
+    if(raw.length){
       // 이 줄에 금액이 있음 — 같은 줄에 남는 텍스트를 상호명으로, 부족하면 직전에 보류해둔 상호명 줄을 사용
-      const amount=amts[amts.length-1];
+      const m=raw[raw.length-1];
+      const amount=parseInt(m[2].replace(/,/g,''));
+      const hasPlus=m[1]==='+';
       let merchant=textOnly;
       const digitRatio=(merchant.match(/\d/g)||[]).length/(merchant.length||1);
       if((!merchant||merchant.length<2||digitRatio>0.5)&&pendingMerchant)merchant=pendingMerchant;
       if(!merchant||merchant.length<2)merchant='항목 '+(items.length+1);
-      items.push({amount,merchant:merchant.slice(0,30),category:classify(merchant),include:true});
+      const isInc=hasPlus||(OCR_INC_RE.test(line)&&!OCR_EXP_RE.test(line));
+      const type=isInc?'inc':'exp';
+      items.push({
+        type,
+        amount,
+        merchant:merchant.slice(0,30),
+        category:type==='inc'?(INC_CATS[0]?.name||'기타 수입'):classify(merchant),
+        include:true
+      });
       pendingMerchant=null;
     }else{
       // 금액 없는 줄 — 다음 줄이 금액만 있는 2줄 포맷일 수 있으니 상호명 후보로 보류
@@ -2659,22 +2768,28 @@ function parseOcrText(text){
       if(line.length>=2&&line.length<=24&&digitRatio<0.3)pendingMerchant=line;
     }
   }
-  _ocrItems=items.length?items:[{amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true}];
+  _ocrItems=items.length?items:[{type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true}];
   document.getElementById('e-ocr-prog').classList.remove('on');
   document.getElementById('e-parsed').classList.add('on');
   buildDateSel('eo-date-wrap','eo-date',date||today_());
   renderOcrItems();
 }
+function ocrCatsFor(type){return type==='inc'?INC_CATS:CatRepo.get();}
 function renderOcrItems(){
-  const cats=CatRepo.get();
   const n=_ocrItems.length;
   document.getElementById('e-ocr-ok').textContent=ocrOkMsg(n);
-  document.getElementById('eo-items').innerHTML=_ocrItems.map((it,i)=>`
+  document.getElementById('eo-items').innerHTML=_ocrItems.map((it,i)=>{
+    const cats=ocrCatsFor(it.type);
+    return`
     <div class="ocr-item-card${it.include?'':' excluded'}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input type="checkbox" ${it.include?'checked':''} onchange="updOcrItem(${i},'include',this.checked)">
         <input class="f-in" style="flex:1;padding:10px 12px" type="text" value="${esc(it.merchant)}" placeholder="상호명" oninput="updOcrItem(${i},'merchant',this.value)">
         <button class="tx-del" onclick="removeOcrItem(${i})">삭제</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div class="pc${it.type==='exp'?' sel':''}" style="flex:1;text-align:center" onclick="updOcrItem(${i},'type','exp')">지출</div>
+        <div class="pc${it.type==='inc'?' sel':''}" style="flex:1;text-align:center;${it.type==='inc'?'border-color:var(--green);color:var(--green);background:rgba(46,139,87,.09)':''}" onclick="updOcrItem(${i},'type','inc')">수입</div>
       </div>
       <div style="display:flex;gap:8px">
         <input class="f-in" style="flex:1;padding:10px 12px;text-align:right" type="number" min="0" inputmode="numeric" value="${it.amount||''}" placeholder="금액" oninput="updOcrItem(${i},'amount',this.value)">
@@ -2682,29 +2797,44 @@ function renderOcrItems(){
           ${cats.map(c=>`<option value="${esc(c.name)}"${c.name===it.category?' selected':''}>${c.emoji||'📦'} ${esc(c.name)}</option>`).join('')}
         </select>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('eo-save').textContent=`전체 저장 (${_ocrItems.filter(x=>x.include).length}건)`;
 }
-function ocrOkMsg(n){return n>1?`✅ ${n}건 인식 — 틀린 항목은 고치거나 체크를 해제한 뒤 저장하세요`:'✅ 인식 완료 — 확인 후 저장하세요';}
+function ocrOkMsg(n){return n>1?`✅ ${n}건 인식 — 지출/수입 구분과 금액을 확인하고, 틀린 항목은 고치거나 체크를 해제한 뒤 저장하세요`:'✅ 인식 완료 — 확인 후 저장하세요';}
 function updOcrItem(i,field,val){
   if(!_ocrItems[i])return;
-  _ocrItems[i][field]=field==='amount'?(parseInt(val)||null):val;
-  // 체크 상태만 카드 스타일·저장 버튼 카운트에 영향을 주므로 그때만 리렌더 —
-  // 금액/상호명 입력 중 매 글자마다 리렌더하면 입력 포커스가 날아간다
-  if(field==='include')renderOcrItems();
+  if(field==='amount')_ocrItems[i].amount=parseInt(val)||null;
+  else if(field==='type'){
+    if(_ocrItems[i].type===val)return;
+    _ocrItems[i].type=val;
+    // 지출⇄수입을 바꾸면 카테고리 목록 자체가 달라지므로 그 항목의 카테고리를 새 목록의 첫 값으로 리셋
+    _ocrItems[i].category=ocrCatsFor(val)[0]?.name||'';
+  }else _ocrItems[i][field]=val;
+  // 체크·타입 변경은 카드 구성 자체가 바뀌므로 리렌더 — 금액/상호명은 매 글자마다 리렌더하면
+  // 입력 포커스가 날아가서 타이핑 중엔 리렌더하지 않는다
+  if(field==='include'||field==='type')renderOcrItems();
 }
 function removeOcrItem(i){_ocrItems.splice(i,1);renderOcrItems();}
-function addOcrItem(){_ocrItems.push({amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true});renderOcrItems();}
+function addOcrItem(){_ocrItems.push({type:'exp',amount:null,merchant:'',category:CatRepo.get()[0]?.name||'기타',include:true});renderOcrItems();}
 function saveOcrItems(){
   const date=getDateStr('eo-date');
   const toSave=_ocrItems.filter(x=>x.include);
   if(!toSave.length){showToast('⚠️ 저장할 항목이 없어요');return;}
   const bad=toSave.some(x=>!x.amount||x.amount<=0||!x.merchant.trim());
   if(bad){showToast('⚠️ 금액 또는 상호명이 비어있는 항목이 있어요');return;}
+  let expN=0,incN=0;
   toSave.forEach(it=>{
-    ExpRepo.add({id:uid(),amount:it.amount,merchant:it.merchant.trim(),category:it.category,date,payment:'카드',memo:'',createdAt:new Date().toISOString()});
+    if(it.type==='inc'){
+      IncRepo.add({id:uid(),amount:it.amount,source:it.merchant.trim(),category:it.category,date,memo:'',createdAt:new Date().toISOString()});
+      incN++;
+    }else{
+      ExpRepo.add({id:uid(),amount:it.amount,merchant:it.merchant.trim(),category:it.category,date,payment:'카드',memo:'',createdAt:new Date().toISOString()});
+      expN++;
+    }
   });
-  showToast(`✅ ${toSave.length}건 저장 완료!`);
+  const parts=[];if(expN)parts.push(`지출 ${expN}건`);if(incN)parts.push(`수입 ${incN}건`);
+  showToast(`✅ ${parts.join(' · ')} 저장 완료!`);
   resetOcr();
   navTo('home');
 }
