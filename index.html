@@ -2743,17 +2743,47 @@ function resetOcr(){
   const inp=document.querySelector('#exp-ocr-zone input');if(inp)inp.value='';
   _ocrItems=[];
 }
+/* 스마트폰 캡처는 글자가 작고(특히 영문 브랜드명 "GS25" 같은 알파벳+숫자 조합)
+   대비가 낮아서 Tesseract가 한글 자모로 오인식하는 경우가 많다.
+   실제 OCR에 넣기 전에 2배 이상 확대 + 흑백 변환 + 대비를 강화해두면
+   같은 인식 엔진이라도 정확도가 눈에 띄게 올라간다 — 특히 작은 영문·숫자에 효과적이다. */
+async function preprocessForOcr(file){
+  try{
+    const bitmap=await createImageBitmap(file);
+    const scale=Math.min(3,Math.max(2,1600/Math.max(bitmap.width,bitmap.height)));
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.round(bitmap.width*scale);
+    canvas.height=Math.round(bitmap.height*scale);
+    const ctx=canvas.getContext('2d');
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const d=imgData.data,contrast=1.35;
+    for(let i=0;i<d.length;i+=4){
+      const gray=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      const v=Math.max(0,Math.min(255,(gray-128)*contrast+128));
+      d[i]=d[i+1]=d[i+2]=v;
+    }
+    ctx.putImageData(imgData,0,0);
+    return await new Promise(resolve=>canvas.toBlob(b=>resolve(b||file),'image/png'));
+  }catch(e){
+    console.warn('OCR 전처리 실패, 원본 이미지로 진행:',e);
+    return file; // 전처리가 실패해도 인식 자체는 원본으로 계속 시도
+  }
+}
 async function handleImg(ev){
   const file=ev.target.files[0];if(!file)return;
   document.getElementById('exp-ocr-zone').style.display='none';
   document.getElementById('e-ocr-prog').classList.add('on');
   document.getElementById('e-prog-lbl').textContent='이미지 분석 중...';
-  document.getElementById('e-prog-sub').textContent='텍스트 인식 준비 중';
+  document.getElementById('e-prog-sub').textContent='이미지 보정 중';
   document.getElementById('e-prog-bar').style.width='5%';
   const imgUrl=URL.createObjectURL(file);
   document.getElementById('e-preview').innerHTML=`<img src="${imgUrl}" style="max-width:100%;border-radius:12px;margin-bottom:14px">`;
   try{
-    const result=await Tesseract.recognize(file,'kor+eng',{
+    const processed=await preprocessForOcr(file);
+    document.getElementById('e-prog-sub').textContent='텍스트 인식 준비 중';
+    const result=await Tesseract.recognize(processed,'kor+eng',{
       logger:m=>{
         if(m.status==='recognizing text'){
           const pct=Math.round((m.progress||0)*100);
