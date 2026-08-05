@@ -835,7 +835,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       <input id="fb-user-id" class="f-in" type="text" placeholder="동기화 코드 (예: myhome2024 — 다른 기기에도 똑같이 입력)" style="font-size:12px;padding:10px 12px">
     </div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button onclick="saveFirebaseConfig()" style="flex:1;padding:11px;background:var(--purple);border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--on-color);cursor:pointer;font-family:inherit">연결</button>
+      <button id="fb-connect-btn" onclick="saveFirebaseConfig()" style="flex:1;padding:11px;background:var(--purple);border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--on-color);cursor:pointer;font-family:inherit">연결</button>
       <button onclick="disconnectFirebase()" style="flex:1;padding:11px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;font-family:inherit">연결 해제</button>
     </div>
     <div style="margin-top:12px;font-size:11px;color:var(--t3);line-height:1.6">
@@ -1242,7 +1242,7 @@ function parseFirebaseConfigPaste(text){
   };
   return{apiKey:pick('apiKey'),projectId:pick('projectId'),appId:pick('appId')};
 }
-function saveFirebaseConfig() {
+async function saveFirebaseConfig() {
   const pasted = document.getElementById('fb-config-paste').value.trim();
   const userId = document.getElementById('fb-user-id').value.trim();
   const parsed = parseFirebaseConfigPaste(pasted);
@@ -1258,13 +1258,21 @@ function saveFirebaseConfig() {
   };
   localStorage.setItem('bh2_firebase_config', JSON.stringify(config));
   localStorage.setItem('bh2_firebase_userid', userId);
-  const ok = initFirebase(config, userId);
-  if (ok) {
-    startRealtimeSync();
-    updateFirebaseStatusUI(true);
-    showToast('✅ Firebase 연결 완료! 동기화 시작됩니다');
-  } else {
-    showToast('❌ Firebase 연결 실패. 설정 값을 확인해주세요');
+  const btn = document.getElementById('fb-connect-btn');
+  if (btn) btn.disabled = true; // 연결 처리 중 중복 클릭 방지
+  try {
+    const ok = initFirebase(config, userId);
+    if (ok) {
+      showToast('☁️ 연결 확인 중...');
+      await bootstrapCloudSync();
+      startRealtimeSync();
+      updateFirebaseStatusUI(true);
+      showToast('✅ Firebase 연결 완료! 동기화 시작됩니다');
+    } else {
+      showToast('❌ Firebase 연결 실패. 설정 값을 확인해주세요');
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1306,9 +1314,33 @@ function startRealtimeSync() {
   });
   showSyncBar('synced', '✅ 실시간 동기화 활성화');
 }
+/* 처음 연결하는 순간, 클라우드 컬렉션이 아직 비어있는데(=이 기기가 이 계정으로 처음 연결)
+   이 기기엔 이미 로컬 데이터가 있으면 — 리스너를 걸자마자 '빈 클라우드' 스냅샷이 그대로
+   localStorage를 덮어써서 기존 데이터를 지워버리는 사고가 날 수 있다.
+   그래서 리스너를 걸기 전에 먼저, 클라우드가 비어있는 컬렉션만 로컬 데이터를 올려둔다. */
+async function bootstrapCloudSync(){
+  const pairs=[
+    ['expenses',ExpRepo,()=>ExpRepo.all()],
+    ['income',IncRepo,()=>IncRepo.all()],
+    ['saving',SavRepo,()=>SavRepo.all()],
+    ['cats',CatRepo,()=>CatRepo.get()],
+    ['goals',GoalRepo,()=>GoalRepo.all()],
+    ['subs',SubRepo,()=>SubRepo.all()]
+  ];
+  for(const[collName,,getLocal]of pairs){
+    const c=col(collName);if(!c)continue;
+    try{
+      const snap=await c.limit(1).get();
+      if(snap.empty){
+        const localData=getLocal();
+        if(localData&&localData.length)await cloudSaveAll(collName,localData);
+      }
+    }catch(e){console.warn('bootstrapCloudSync failed for',collName,e);}
+  }
+}
 
 /* 앱 시작 시 저장된 Firebase 설정 자동 로드 */
-function tryAutoConnectFirebase() {
+async function tryAutoConnectFirebase() {
   try {
     const config = JSON.parse(localStorage.getItem('bh2_firebase_config') || 'null');
     const userId = localStorage.getItem('bh2_firebase_userid');
@@ -1317,7 +1349,7 @@ function tryAutoConnectFirebase() {
       document.getElementById('fb-config-paste').value = JSON.stringify(config, null, 2);
       document.getElementById('fb-user-id').value    = userId;
       const ok = initFirebase(config, userId);
-      if (ok) { startRealtimeSync(); updateFirebaseStatusUI(true); }
+      if (ok) { await bootstrapCloudSync(); startRealtimeSync(); updateFirebaseStatusUI(true); }
     }
   } catch(e) { console.warn('auto-connect failed:', e); }
 }
