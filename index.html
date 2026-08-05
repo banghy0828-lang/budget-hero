@@ -1122,6 +1122,8 @@ let _userId = null;      // 사용자 식별자 (컬렉션 경로에 사용)
 let _unsubListeners = []; // onSnapshot 리스너 해제 함수 목록
 
 /* Firebase 초기화 */
+let _persistenceEnabled = false; // enablePersistence()는 세션당 딱 한 번만 호출 가능 — 이미 연결된 상태에서
+                                  // '연결'을 다시 누르면 두 번째 호출이 실패해서 "연결 실패"로 잘못 뜨는 버그가 있었음
 function initFirebase(config, userId) {
   try {
     // 이미 앱이 초기화됐으면 재사용
@@ -1130,8 +1132,11 @@ function initFirebase(config, userId) {
     }
     _db = firebase.firestore();
     _userId = userId;
-    // 오프라인 캐시 활성화 (오프라인 → 로컬 Firestore 캐시 사용)
-    _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    // 오프라인 캐시 활성화 (오프라인 → 로컬 Firestore 캐시 사용) — 한 번만
+    if (!_persistenceEnabled) {
+      _persistenceEnabled = true;
+      _db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    }
     // 익명 인증 — Firestore 규칙에 request.auth != null 조건을 걸면
     // 로그인(익명이라도)하지 않은 외부인은 apiKey를 알아도 데이터를 읽거나 쓸 수 없음
     firebase.auth().signInAnonymously().catch(e => console.warn('익명 인증 실패:', e));
