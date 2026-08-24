@@ -623,6 +623,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 
   <div class="insight" id="insight-pill">오늘도 현명한 소비를 기록해 보세요.</div>
   <div class="period-badge" id="home-period-badge" style="margin:0 22px 20px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px"></div>
+  <div id="home-alerts"></div>
   <div id="home-sub-badge"></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">카테고리별 예산</div><div class="sec-link" onclick="navTo('settings')">설정</div></div><div id="home-cat-prog"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 지출</div><div class="sec-link" onclick="navTo('hist-exp')">전체</div></div><div class="tx-card" id="h-rec-exp"></div></div>
@@ -1777,6 +1778,7 @@ function renderHome(){
   document.getElementById('h-sav').textContent=fmt(sav);
   document.getElementById('insight-pill').innerHTML=weekdayInsight()||genInsight(exp,pexp,inc,pinc,sav,budget);
   renderPeriodBadge('home-period-badge');
+  renderHomeAlerts(exp,pexp);
   renderCatProg('home-cat-prog',el,pel);
   renderRecent('h-rec-exp',el.slice(0,4),'exp');
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
@@ -1802,6 +1804,41 @@ function renderHomeSubBadge(){
       <div style="font-size:15px;font-weight:800">${fmt(totalM)}<span style="font-size:10px;color:var(--t3);font-weight:600">/월</span></div>
     </div>
   </div>`;
+}
+
+/* 홈 화면 상단 알림 배너 — ①이전 기간 대비 지출 증감(10%↑ 또는 감소 시), ②결제일이 지났는데
+   아직 이번 달 결제로 기록되지 않은 구독. 평소엔 안 보이다가 해당될 때만 뜬다. */
+function renderHomeAlerts(exp,pexp){
+  const el=document.getElementById('home-alerts');if(!el)return;
+  const cards=[];
+  if(pexp>0){
+    const diff=exp-pexp,pct=Math.round(Math.abs(diff)/pexp*100);
+    if(diff>0&&pct>=10){
+      cards.push(`<div class="sec" style="padding:0"><div style="background:rgba(255,90,90,.08);border:1px solid rgba(255,90,90,.25);border-radius:16px;padding:14px 16px;margin:0 22px 12px">
+        <div style="font-size:13px;font-weight:700;color:var(--t1)">⚠️ 지출이 늘었어요</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:4px">이전 기간보다 <strong style="color:var(--red)">${fmt(diff)}(${pct}%) 더</strong> 썼어요.</div>
+      </div></div>`);
+    }else if(diff<0){
+      cards.push(`<div class="sec" style="padding:0"><div style="background:rgba(80,200,140,.08);border:1px solid rgba(80,200,140,.25);border-radius:16px;padding:14px 16px;margin:0 22px 12px">
+        <div style="font-size:13px;font-weight:700;color:var(--t1)">👍 지출이 줄었어요</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:4px">이전 기간보다 <strong style="color:var(--green)">${fmt(Math.abs(diff))}(${pct}%) 덜</strong> 썼어요.</div>
+      </div></div>`);
+    }
+  }
+  const curYm=today_().slice(0,7),curDay=parseInt(today_().slice(8,10));
+  const overdue=SubRepo.all().filter(s=>{
+    if(s.lastPaidMonth===curYm)return false;
+    const m=(s.cycle||'').match(/(\d{1,2})\s*일/);
+    if(!m)return false;
+    return curDay>=parseInt(m[1]);
+  });
+  if(overdue.length){
+    cards.push(`<div class="sec" style="padding:0;cursor:pointer" onclick="navTo('settings')"><div style="background:rgba(255,180,60,.1);border:1px solid rgba(255,180,60,.3);border-radius:16px;padding:14px 16px;margin:0 22px 12px">
+      <div style="font-size:13px;font-weight:700;color:var(--t1)">📺 결제일 지난 구독 ${overdue.length}건</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">${overdue.map(s=>esc(s.name)).join(', ')} 결제 기록이 아직 없어요.</div>
+    </div></div>`);
+  }
+  el.innerHTML=cards.join('');
 }
 
 /* Period badge shown at top of Home & Stats — shows active range + change button */
