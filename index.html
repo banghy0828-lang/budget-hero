@@ -854,7 +854,11 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     </div>
     <div id="savprod-list"></div>
     <div id="savprod-freshness" style="font-size:11px;color:var(--t3);text-align:center;margin:12px 0 4px"></div>
-    <a href="https://finlife.fss.or.kr/finlife/svcgd/svcRltnHom/list.do?menuNo=700001" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">🏦 전국 은행 예·적금 금리 비교 (금융감독원 공식) ↗</a>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <a href="https://finlife.fss.or.kr/finlife/svings/fdrmDpst/list.do?menuNo=700002" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:13px 8px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">🏦 정기예금 금리비교 ↗</a>
+      <a href="https://finlife.fss.or.kr/finlife/svings/fdrmEnty/list.do?menuNo=700003" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:13px 8px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">🏦 적금 금리비교 ↗</a>
+    </div>
+    <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:6px">둘 다 금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 사이트 (링크 직접 확인 완료)</div>
     <a href="https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">📍 우리 지역 청년정책 찾기 (온통청년 공식, 지역 필터 가능) ↗</a>
   </div>
 </div>
@@ -2747,19 +2751,38 @@ const GOV_SAVINGS_PRODUCTS=[
     id:'youth-tomorrow',
     name:'청년내일저축계좌',
     ageMin:15,ageMax:39,
-    summary:'매달 10만원 저축하면 정부가 소득 수준에 따라 월 10~30만원을 추가 적립. 3년 유지 시 최대 1,440만원 이상 수령.',
-    note:'소득 수준(차상위 이하/기준중위소득 100% 이하 등)에 따라 정부 지원금이 달라짐. 근로·사업소득 요건 있음.',
-    link:'https://www.gov.kr'
+    benefit:'매달 10만원 저축 → 정부가 소득 수준에 따라 월 10~30만원 추가 적립',
+    result:'3년 유지 시 최대 1,440만원 이상 수령',
+    income:'차상위 이하 또는 기준중위소득 100% 이하 (수준별로 정부 지원금 차등)',
+    other:'근로·사업소득 요건 있음',
+    cycle:'연 1회 모집 (통상 5월)',
+    lastWindow:'2026.05.04 ~ 05.20',
+    lastWindowPassed:true,
+    nextWindow:'2027년 5월경 (정확한 일정은 매년 3~4월에 공고)',
+    link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
   },
   {
     id:'youth-future',
     name:'청년미래적금',
     ageMin:19,ageMax:34,
-    summary:'월 최대 50만원 저축 시 정부가 납입금의 6~12%를 추가 기여, 최대 2,255만원까지 목돈 마련 가능.',
-    note:'개인소득 7,500만원 이하(종합소득 6,300만원 이하), 기준중위소득 200% 이하(맞벌이 2인 가구 250% 이하) 조건. 신청 기간이 연 1~2회로 한정돼 있어 시기를 놓치면 다음 회차까지 기다려야 함.',
+    benefit:'월 최대 50만원 저축 → 정부가 납입금의 6~12% 추가 기여',
+    result:'최대 2,255만원까지 목돈 마련 가능',
+    income:'개인소득 7,500만원 이하(종합소득 6,300만원 이하), 기준중위소득 200% 이하(맞벌이 2인 가구 250% 이하)',
+    other:'연 2회(6월·12월) 모집',
+    cycle:'연 2회 모집 (6월, 12월)',
+    lastWindow:'2026.06.22 ~ 07.03',
+    lastWindowPassed:true,
+    nextWindow:'2026년 12월 중',
     link:'https://www.gov.kr'
   }
 ];
+/* 모집 시기 상태를 오늘 날짜 기준으로 계산 — "모집중"인지 "마감(다음 예정)"인지를
+   나이 자격과 별개로 항상 같이 보여준다. 지금은 두 상품 다 lastWindowPassed로 수동
+   표기하지만, 다음 검증 때(1.5절 최신화 주기) 실제 오늘 날짜와 비교해서 갱신하면 된다. */
+function savProductStatus(p){
+  if(p.lastWindowPassed)return{label:`마감 · 다음 ${p.nextWindow}`,cls:'closed'};
+  return{label:`모집중 (${p.lastWindow})`,cls:'open'};
+}
 /* 정부지원 상품은 통합 API가 없어 수작업으로 채워넣은 데이터라, "언제 확인한 정보인지"를
    화면에 항상 같이 보여준다. 3개월(분기)마다 한 번씩 다시 검색해서 이 날짜를 갱신하는 걸
    권장 주기로 삼는다 — 청년미래적금류는 보통 연 1~2회 신청기간이 발표되고,
@@ -2805,19 +2828,30 @@ function renderSavProductReco(){
     </div>`;
   }
   if(eligible.length){
-    html+=eligible.map(p=>`
-      <div class="cat-row" style="align-items:flex-start;padding:16px">
-        <div class="cr-emo" style="cursor:default;background:rgba(46,139,87,.12)">🎯</div>
-        <div class="cr-body">
-          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${esc(p.name)}</span><span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(46,139,87,.12);border-radius:20px;padding:2px 8px">신청 가능 나이</span></div>
-          <div class="cr-spent" style="white-space:normal;line-height:1.5;margin-top:4px">${esc(p.summary)}</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:6px;line-height:1.5">${esc(p.note)}</div>
+    html+=eligible.map(p=>{
+      const st=savProductStatus(p);
+      const stColor=st.cls==='open'?'var(--green)':'var(--t3)';
+      const stBg=st.cls==='open'?'rgba(46,139,87,.12)':'var(--card3)';
+      return`
+      <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          <span style="font-size:15px;font-weight:800">🎯 ${esc(p.name)}</span>
+          <span style="font-size:10.5px;font-weight:700;color:${stColor};background:${stBg};border-radius:20px;padding:3px 10px;white-space:nowrap">${esc(st.label)}</span>
         </div>
-      </div>`).join('');
+        <div style="display:grid;grid-template-columns:64px 1fr;gap:6px 10px;font-size:12.5px">
+          <div style="color:var(--t3);font-weight:700">대상</div><div>만 ${p.ageMin}~${p.ageMax}세</div>
+          <div style="color:var(--t3);font-weight:700">지원내용</div><div>${esc(p.benefit)}${p.result?`<br><span style="color:var(--purple);font-weight:700">${esc(p.result)}</span>`:''}</div>
+          <div style="color:var(--t3);font-weight:700">소득조건</div><div>${esc(p.income)}</div>
+          ${p.other?`<div style="color:var(--t3);font-weight:700">기타</div><div>${esc(p.other)}</div>`:''}
+          <div style="color:var(--t3);font-weight:700">모집주기</div><div>${esc(p.cycle)}</div>
+        </div>
+        <a href="${p.link}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:12px;padding:10px;background:var(--bg2);border-radius:var(--r-sm);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">공식 안내 페이지 ↗</a>
+      </div>`;
+    }).join('');
   }
   if(ineligible.length){
     html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 6px">나이 조건에 안 맞는 상품</div>`+
-      ineligible.map(p=>`<div class="cat-row" style="opacity:.5"><div class="cr-emo" style="cursor:default">🔒</div><div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">만 ${p.ageMin}~${p.ageMax}세만 신청 가능</div></div></div>`).join('');
+      ineligible.map(p=>`<div class="cat-row" style="opacity:.5"><div class="cr-emo" style="cursor:default">🔒</div><div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">만 ${p.ageMin}~${p.ageMax}세만 신청 가능 · ${esc(savProductStatus(p).label)}</div></div></div>`).join('');
   }
   el.innerHTML=html;
 }
