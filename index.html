@@ -846,13 +846,16 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   <div class="sec" style="margin-bottom:0">
     <div class="sec-hdr"><div class="sec-title">저축상품 추천</div></div>
     <div class="s-card" style="margin:0 0 10px">
-      <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
         <div style="flex:1"><div class="f-lbl2">만 나이</div><input id="savprod-age" type="number" inputmode="numeric" placeholder="예: 27" oninput="renderSavProductReco()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
+        <div style="flex:1"><div class="f-lbl2">거주 지역 (선택)</div><input id="savprod-region" type="text" placeholder="예: 서울시" oninput="renderSavProductReco()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
       </div>
-      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5">나이 기준으로 신청 가능한 정부지원 저축상품을 안내해요. 소득 조건 등은 상품별로 따로 있어서, 자세한 자격은 아래 링크에서 직접 확인하셔야 해요.</div>
+      <div style="font-size:11px;color:var(--t3);line-height:1.5">나이 기준으로 신청 가능한 전국 단위 정부지원 저축상품을 안내해요. 지자체별 상품(예: 서울시 희망두배 청년통장)은 너무 많고 자주 바뀌어서 직접 다 담는 대신, 아래 공식 검색 링크로 바로 연결해드려요.</div>
     </div>
     <div id="savprod-list"></div>
-    <a href="https://finlife.fss.or.kr/finlife/svcgd/svcRltnHom/list.do?menuNo=700001" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:10px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">🏦 전국 은행 예·적금 금리 비교 (금융감독원 공식) ↗</a>
+    <div id="savprod-freshness" style="font-size:11px;color:var(--t3);text-align:center;margin:12px 0 4px"></div>
+    <a href="https://finlife.fss.or.kr/finlife/svcgd/svcRltnHom/list.do?menuNo=700001" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">🏦 전국 은행 예·적금 금리 비교 (금융감독원 공식) ↗</a>
+    <a href="https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">📍 우리 지역 청년정책 찾기 (온통청년 공식, 지역 필터 가능) ↗</a>
   </div>
 </div>
 
@@ -2757,15 +2760,36 @@ const GOV_SAVINGS_PRODUCTS=[
     link:'https://www.gov.kr'
   }
 ];
+/* 정부지원 상품은 통합 API가 없어 수작업으로 채워넣은 데이터라, "언제 확인한 정보인지"를
+   화면에 항상 같이 보여준다. 3개월(분기)마다 한 번씩 다시 검색해서 이 날짜를 갱신하는 걸
+   권장 주기로 삼는다 — 청년미래적금류는 보통 연 1~2회 신청기간이 발표되고,
+   청년내일저축계좌류는 회계연도가 바뀌는 1~2월에 조건이 갱신되는 경우가 많기 때문. */
+const GOV_SAVINGS_LAST_VERIFIED='2026-08-30';
+function nextVerifyDate(fromStr){
+  const d=new Date(fromStr);d.setMonth(d.getMonth()+3);
+  return`${d.getFullYear()}년 ${d.getMonth()+1}월`;
+}
 function renderSavProductReco(){
   const el=document.getElementById('savprod-list');if(!el)return;
   const ageInput=document.getElementById('savprod-age');
+  const regionInput=document.getElementById('savprod-region');
   let ageVal=ageInput?ageInput.value:'';
+  let regionVal=regionInput?regionInput.value:'';
   if(!ageVal){
     try{ageVal=localStorage.getItem('bh2_profile_age')||'';}catch(e){ageVal='';}
     if(ageVal&&ageInput)ageInput.value=ageVal;
   }
+  if(!regionVal){
+    try{regionVal=localStorage.getItem('bh2_profile_region')||'';}catch(e){regionVal='';}
+    if(regionVal&&regionInput)regionInput.value=regionVal;
+  }
   if(ageVal)try{localStorage.setItem('bh2_profile_age',ageVal)}catch(e){}
+  if(regionVal)try{localStorage.setItem('bh2_profile_region',regionVal)}catch(e){}
+  const freshEl=document.getElementById('savprod-freshness');
+  if(freshEl){
+    const [y,m]=GOV_SAVINGS_LAST_VERIFIED.split('-');
+    freshEl.textContent=`ℹ️ 정부지원 상품 정보 최종 확인: ${y}년 ${parseInt(m)}월 · 다음 확인 권장: ${nextVerifyDate(GOV_SAVINGS_LAST_VERIFIED)} (분기 1회)`;
+  }
   const age=parseInt(ageVal);
   if(!age||age<=0){
     el.innerHTML=`<div class="empty" style="padding:20px 0"><div class="empty-e">🎯</div><div class="empty-t">나이를 입력하면 신청 가능한 상품을 알려드려요</div></div>`;
@@ -2774,6 +2798,12 @@ function renderSavProductReco(){
   const eligible=GOV_SAVINGS_PRODUCTS.filter(p=>age>=p.ageMin&&age<=p.ageMax);
   const ineligible=GOV_SAVINGS_PRODUCTS.filter(p=>!(age>=p.ageMin&&age<=p.ageMax));
   let html='';
+  if(regionVal){
+    html+=`<div class="cat-row" style="align-items:flex-start;padding:16px;background:var(--card2)">
+      <div class="cr-emo" style="cursor:default">📍</div>
+      <div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(regionVal)} 지역 상품은 여기 없어요</div><div class="cr-spent" style="white-space:normal;line-height:1.5">아래 &ldquo;우리 지역 청년정책 찾기&rdquo; 링크에서 ${esc(regionVal)}로 검색하면 지자체 전용 상품(청년통장 등)까지 확인할 수 있어요.</div></div>
+    </div>`;
+  }
   if(eligible.length){
     html+=eligible.map(p=>`
       <div class="cat-row" style="align-items:flex-start;padding:16px">
