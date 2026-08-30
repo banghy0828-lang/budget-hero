@@ -883,6 +883,16 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div class="budget-total"><div class="bt-lbl">월 총 예산 (자동 합산)</div><div class="bt-val" id="total-budget">₩0</div></div>
   </div>
   <div class="s-card">
+    <div class="s-title">수입 카테고리</div>
+    <div id="inc-cat-list"></div>
+    <button class="add-cat-btn" onclick="addGenericCat('inc')">＋ 카테고리 추가</button>
+  </div>
+  <div class="s-card">
+    <div class="s-title">저축 카테고리</div>
+    <div id="sav-cat-list"></div>
+    <button class="add-cat-btn" onclick="addGenericCat('sav')">＋ 카테고리 추가</button>
+  </div>
+  <div class="s-card">
     <div class="s-title">학습된 분류 규칙</div>
     <div id="learned-list" style="font-size:13px;color:var(--t2);line-height:2.2"></div>
     <button onclick="clearLearned()" style="margin-top:12px;background:rgba(192,67,46,.1);border:1px solid var(--red);color:var(--red);border-radius:var(--r-sm);padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">초기화</button>
@@ -1315,6 +1325,8 @@ function startRealtimeSync() {
   attachListener('saving',    'bh2_sav',   () => { renderHome(); renderGoalsPage(); });
   attachListener('goals',     'bh2_goals', () => { renderGoalsPage(); });
   attachListener('cats',      'bh2_cats',  () => { renderHome(); renderSettings(); });
+  attachListener('inccats',   'bh2_inccats', () => { renderSettings(); });
+  attachListener('savcats',   'bh2_savcats', () => { renderSettings(); });
   attachListener('subs',      'bh2_subs',  () => {
     const sc = document.querySelector('.screen.active');
     if (sc && sc.id === 'sc-settings') renderSubscriptions();
@@ -1331,6 +1343,8 @@ async function bootstrapCloudSync(){
     ['income',IncRepo,()=>IncRepo.all()],
     ['saving',SavRepo,()=>SavRepo.all()],
     ['cats',CatRepo,()=>CatRepo.get()],
+    ['inccats',IncCatRepo,()=>IncCatRepo.get()],
+    ['savcats',SavCatRepo,()=>SavCatRepo.get()],
     ['goals',GoalRepo,()=>GoalRepo.all()],
     ['subs',SubRepo,()=>SubRepo.all()]
   ];
@@ -1448,6 +1462,39 @@ const CatRepo={
   childrenOf(parentId){return this.get().filter(c=>c.parentId===parentId)},
   total(){return this.topLevel().reduce((s,c)=>s+(c.budget||0),0)}
 };
+/* 수입·저축 카테고리는 예산 개념이 없어서 CatRepo보다 훨씬 단순하지만,
+   같은 구조(id/name/emoji/parentId)를 쓰기 때문에 공통 로직은 팩토리로 묶는다.
+   이렇게 해야 수입·저축도 지출처럼 대분류 아래 세부 항목을 사용자가 마음대로
+   추가·삭제할 수 있다(예: 저축 > 적금 아래 "청약저축"/"비상금 적금" 등). */
+function makeSimpleCatRepo(storageKey,cloudColl,defaultsFn){
+  return{
+    _k:storageKey,_c:cloudColl,
+    defaults:defaultsFn,
+    get(){
+      try{
+        const v=JSON.parse(localStorage.getItem(this._k));
+        if(!v||!v.length){const d=this.defaults();localStorage.setItem(this._k,JSON.stringify(d));return d;}
+        return v;
+      }catch{const d=this.defaults();localStorage.setItem(this._k,JSON.stringify(d));return d;}
+    },
+    save(a){localStorage.setItem(this._k,JSON.stringify(a));cloudSaveAll(this._c,a)},
+    add(c){const a=this.get();a.push(c);this.save(a)},
+    update(id,p){const a=this.get();const i=a.findIndex(c=>c.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a)}},
+    del(id){this.save(this.get().filter(c=>c.id!==id))},
+    topLevel(){return this.get().filter(c=>!c.parentId)},
+    childrenOf(parentId){return this.get().filter(c=>c.parentId===parentId)}
+  };
+}
+const IncCatRepo=makeSimpleCatRepo('bh2_inccats','inccats',()=>[
+  {id:uid(),name:'월급',emoji:'💼'},{id:uid(),name:'부업',emoji:'💡'},{id:uid(),name:'용돈',emoji:'🎁'},
+  {id:uid(),name:'환급금',emoji:'💰'},{id:uid(),name:'기타 수입',emoji:'📦'}
+]);
+const SavCatRepo=makeSimpleCatRepo('bh2_savcats','savcats',()=>[
+  {id:uid(),name:'적금',emoji:'🏦'},{id:uid(),name:'예금',emoji:'💳'},{id:uid(),name:'비상금',emoji:'🛡'},
+  {id:uid(),name:'투자',emoji:'📈'},{id:uid(),name:'기타 저축',emoji:'📦'}
+]);
+function repoForType(typeKey){return typeKey==='exp'?CatRepo:typeKey==='inc'?IncCatRepo:typeKey==='sav'?SavCatRepo:null;}
+function catsForType(type){return type==='exp'?CatRepo.get():type==='inc'?IncCatRepo.get():SavCatRepo.get();}
 /* 대분류(부모) 카테고리 하나 + 그 안의 세부 항목들 지출을 합쳐서 반환.
    spentMap은 {카테고리이름: 합계} 형태(이미 기간별로 집계된 것)를 받는다. */
 function catAggSpent(cat,spentMap,allCats){
@@ -1486,7 +1533,7 @@ const ShadowBackup={
         const prev=this.get();
         if(prev&&((prev.exp&&prev.exp.length)||(prev.inc&&prev.inc.length)||(prev.sav&&prev.sav.length)))return;
       }
-      const snap={exp,inc,sav,cats:CatRepo.get(),goals:GoalRepo.all(),subs:SubRepo.all(),savedAt:new Date().toISOString()};
+      const snap={exp,inc,sav,cats:CatRepo.get(),inccats:IncCatRepo.get(),savcats:SavCatRepo.get(),goals:GoalRepo.all(),subs:SubRepo.all(),savedAt:new Date().toISOString()};
       localStorage.setItem(this._k,JSON.stringify(snap));
     }catch(e){}
   },
@@ -1505,6 +1552,8 @@ function checkForDataLoss(){
     if(snap.inc)IncRepo.save(snap.inc);
     if(snap.sav)SavRepo.save(snap.sav);
     if(snap.cats)CatRepo.save(snap.cats);
+    if(snap.inccats)IncCatRepo.save(snap.inccats);
+    if(snap.savcats)SavCatRepo.save(snap.savcats);
     if(snap.goals)GoalRepo.save(snap.goals);
     if(snap.subs)SubRepo.save(snap.subs);
     showToast('✅ 복구됐어요');
@@ -2017,7 +2066,7 @@ function buildCpCard(c,use,prevUse,allCats){
 function renderRecent(elId,list,type){
   const el=document.getElementById(elId);
   if(!list.length){el.innerHTML=`<div style="padding:18px 20px;text-align:center;color:var(--t3);font-size:13px">내역 없음</div>`;return;}
-  const cats=type==='exp'?CatRepo.get():type==='inc'?INC_CATS:SAV_CATS;
+  const cats=catsForType(type);
   el.innerHTML=list.map(e=>{
     const ci=cats.find(c=>c.name===e.category)||{emoji:'📦'};
     const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
@@ -2032,8 +2081,6 @@ function renderRecent(elId,list,type){
 /* ═══════════════════════════ CAT CHIP RENDERING ═══════════════════════════ */
 const selCat={ef:'',em:'',inc:'월급',sav:'적금'};
 const selPay={ef:'카드',em:'카드'};
-const INC_CATS=[{name:'월급',emoji:'💼'},{name:'부업',emoji:'💡'},{name:'용돈',emoji:'🎁'},{name:'환급금',emoji:'💰'},{name:'기타 수입',emoji:'📦'}];
-const SAV_CATS=[{name:'적금',emoji:'🏦'},{name:'예금',emoji:'💳'},{name:'비상금',emoji:'🛡'},{name:'투자',emoji:'📈'},{name:'기타 저축',emoji:'📦'}];
 
 /* 대분류 칩을 탭하면(세부 항목이 있는 경우) 그 아래로 세부 항목 칩이 한 줄 펼쳐진다.
    세부 항목을 고르지 않고 대분류 칩을 한 번 더 탭하면 대분류 자체가 선택된다.
@@ -2073,7 +2120,7 @@ function pickChildChip(elId,key,topId,ki,cls){
   renderChips(elId,cats,key,cls);
 }
 // 'et'(수정 모달)는 수정 중인 항목의 타입(_etType)에 따라 exp/inc/sav 카테고리 목록이 바뀐다
-function chipCats(key){const k=key==='et'?_etType:key;return k==='inc'?INC_CATS:k==='sav'?SAV_CATS:CatRepo.get();}
+function chipCats(key){const k=key==='et'?_etType:key;return k==='inc'?IncCatRepo.get():k==='sav'?SavCatRepo.get():CatRepo.get();}
 function chipCls(key){const k=key==='et'?_etType:key;return k==='inc'?'sel-inc':k==='sav'?'sel-sav':'sel-exp';}
 
 function selPC(el,prefix){
@@ -2140,7 +2187,7 @@ function saveQuick(){
 }
 
 /* ═══════════════════════════ INCOME / SAVING ═══════════════════════════ */
-function initIncForm(){selCat.inc='월급';['inc-amt','inc-src','inc-memo'].forEach(id=>document.getElementById(id).value='');buildDateSel('inc-date-wrap','inc-date',today_());document.getElementById('inc-save').disabled=true;renderChips('inc-cats',INC_CATS,'inc','sel-inc');}
+function initIncForm(){selCat.inc=IncCatRepo.topLevel()[0]?.name||'월급';['inc-amt','inc-src','inc-memo'].forEach(id=>document.getElementById(id).value='');buildDateSel('inc-date-wrap','inc-date',today_());document.getElementById('inc-save').disabled=true;renderChips('inc-cats',IncCatRepo.get(),'inc','sel-inc');}
 function onIncChange(){const a=document.getElementById('inc-amt').value,s=document.getElementById('inc-src').value;document.getElementById('inc-save').disabled=!a||!s;}
 function saveIncome(){
   const amt=parseInt(document.getElementById('inc-amt').value),src=document.getElementById('inc-src').value;
@@ -2149,9 +2196,9 @@ function saveIncome(){
   showToast('✅ 수입 기록 완료!');navTo('home');
 }
 function initSavForm(){
-  selCat.sav='적금';['sav-amt','sav-name','sav-memo'].forEach(id=>document.getElementById(id).value='');
+  selCat.sav=SavCatRepo.topLevel()[0]?.name||'적금';['sav-amt','sav-name','sav-memo'].forEach(id=>document.getElementById(id).value='');
   buildDateSel('sav-date-wrap','sav-date',today_());document.getElementById('sav-save').disabled=true;
-  renderChips('sav-cats',SAV_CATS,'sav','sel-sav');
+  renderChips('sav-cats',SavCatRepo.get(),'sav','sel-sav');
   const sel=document.getElementById('sav-goal');sel.innerHTML='<option value="">목표 없음</option>';
   GoalRepo.all().forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=(g.emoji||'🎯')+' '+g.name;sel.appendChild(o);});
 }
@@ -2167,9 +2214,9 @@ function saveSaving(){
 
 /* ═══════════════════════════ HISTORY ═══════════════════════════ */
 const histFlt={exp:'전체',inc:'전체',sav:'전체'};
+// 필터 칩은 대분류만 보여준다 — 고르면 그 안의 세부 항목까지 함께 걸러진다(아래 renderHist)
 function histCatNames(type){
-  // 지출 필터는 대분류만 보여준다 — 고르면 그 안의 세부 항목까지 함께 걸러진다(아래 renderHist)
-  return type==='exp'?['전체',...CatRepo.get().filter(c=>!c.parentId).map(c=>c.name)]:type==='inc'?['전체','월급','부업','용돈','환급금','기타 수입']:['전체','적금','예금','비상금','투자','기타 저축'];
+  return['전체',...repoForType(type).topLevel().map(c=>c.name)];
 }
 function renderHist(type){
   const repo=type==='exp'?ExpRepo:type==='inc'?IncRepo:SavRepo;
@@ -2182,13 +2229,10 @@ function renderHist(type){
   fr.innerHTML=catNames.map((c,i)=>`<div class="fc${c===flt?' active':''} ${acls}" onclick="pickFlt('${type}',${i})">${esc(c)}</div>`).join('');
   let all=repo.all();
   if(flt!=='전체'){
-    if(type==='exp'){
-      const topCat=CatRepo.get().find(c=>c.name===flt&&!c.parentId);
-      const matchNames=topCat?[topCat.name,...CatRepo.childrenOf(topCat.id).map(k=>k.name)]:[flt];
-      all=all.filter(e=>matchNames.includes(e.category));
-    }else{
-      all=all.filter(e=>e.category===flt);
-    }
+    const catRepo=repoForType(type);
+    const topCat=catRepo.get().find(c=>c.name===flt&&!c.parentId);
+    const matchNames=topCat?[topCat.name,...catRepo.childrenOf(topCat.id).map(k=>k.name)]:[flt];
+    all=all.filter(e=>matchNames.includes(e.category));
   }
   const el=document.getElementById('list-'+type);
   if(!all.length){el.innerHTML=`<div class="empty"><div class="empty-e">📋</div><div class="empty-t">내역 없음</div></div>`;return;}
@@ -2201,7 +2245,7 @@ function renderHist(type){
         <div style="font-size:13px;font-weight:700;color:${type==='exp'?'var(--red)':'var(--green)'}">${sign}${fmt(sumAmt(items))}</div>
       </div>
       <div class="tx-card" style="margin:0 22px">
-        ${items.map(e=>{const ci=(type==='exp'?cats:type==='inc'?INC_CATS:SAV_CATS).find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
+        ${items.map(e=>{const ci=(type==='exp'?cats:catsForType(type)).find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
           return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
           <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)}${e.payment?' · '+esc(e.payment):''} · ${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div>
           <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(e.amount)}</div><div class="tx-actions"><button class="tx-edit" onclick="openEditTx('${type}','${e.id}',event)">수정</button><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div></div>`;
@@ -2699,6 +2743,8 @@ function renderSettings(){
   document.getElementById('period-mode-label').textContent=p.mode==='custom'?'사용자 지정':(p.recurringStartDay&&p.recurringStartDay!==1?`매월 ${p.recurringStartDay}일 시작`:'이번 달 (달력 기준)');
   document.getElementById('period-range-label').textContent=PeriodStore.label();
   renderCatSettingList();
+  renderGenericCatList('inc');
+  renderGenericCatList('sav');
   renderLearnedList();
   renderSubscriptions();
   renderBackupReminder();
@@ -2758,6 +2804,64 @@ function delCat(id){
     renderCatSettingList();showToast('🗑 삭제됐어요');
   });
 }
+
+/* ═══════════════════════════ 수입·저축 카테고리 (예산 없는 간단 버전) ═══════════════════════════
+   지출 카테고리와 구조는 같지만(대분류 + 세부 항목) 예산 입력이 없다.
+   typeKey는 'inc' 또는 'sav' — repoForType()으로 실제 저장소를 찾는다. */
+function renderGenericCatList(typeKey){
+  const repo=repoForType(typeKey);
+  const containerId=typeKey==='inc'?'inc-cat-list':'sav-cat-list';
+  const el=document.getElementById(containerId);if(!el)return;
+  const cats=repo.get();
+  const tops=cats.filter(c=>!c.parentId);
+  el.innerHTML=tops.map(c=>{
+    const kids=cats.filter(k=>k.parentId===c.id);
+    const parentRow=`
+    <div class="cat-row">
+      <div class="cr-emo" onclick="openGenericCatEmojiPicker('${typeKey}','${c.id}')">${c.emoji||'📦'}</div>
+      <div class="cr-body">
+        <input class="cr-name-in" value="${esc(c.name)}" maxlength="14" onchange="updateGenericCatField('${typeKey}','${c.id}','name',this.value)">
+        ${kids.length?`<div class="cr-spent">세부 ${kids.length}개</div>`:''}
+      </div>
+      <button class="cr-del" onclick="delGenericCat('${typeKey}','${c.id}')">✕</button>
+    </div>`;
+    const kidRows=kids.map(k=>`
+    <div class="cat-row cat-row-sub">
+      <div class="cr-emo cr-emo-sm" onclick="openGenericCatEmojiPicker('${typeKey}','${k.id}')">${k.emoji||'📦'}</div>
+      <div class="cr-body">
+        <input class="cr-name-in" value="${esc(k.name)}" maxlength="14" onchange="updateGenericCatField('${typeKey}','${k.id}','name',this.value)">
+      </div>
+      <button class="cr-del" onclick="delGenericCat('${typeKey}','${k.id}')">✕</button>
+    </div>`).join('');
+    const addSubBtn=`<button class="add-cat-btn add-subcat-btn" onclick="addGenericSubCat('${typeKey}','${c.id}')">＋ ${esc(c.name)} 세부 항목 추가</button>`;
+    return parentRow+kidRows+addSubBtn;
+  }).join('');
+}
+function updateGenericCatField(typeKey,id,field,val){repoForType(typeKey).update(id,{[field]:val});renderGenericCatList(typeKey);}
+function addGenericCat(typeKey){repoForType(typeKey).add({id:uid(),name:'새 카테고리',emoji:'📦'});renderGenericCatList(typeKey);}
+function addGenericSubCat(typeKey,parentId){
+  const repo=repoForType(typeKey);const parent=repo.get().find(c=>c.id===parentId);if(!parent)return;
+  repo.add({id:uid(),name:'세부 항목',emoji:parent.emoji||'📦',parentId});
+  renderGenericCatList(typeKey);
+}
+function delGenericCat(typeKey,id){
+  const repo=repoForType(typeKey);const cats=repo.get();
+  const target=cats.find(c=>c.id===id);if(!target)return;
+  const isTop=!target.parentId;
+  if(isTop&&cats.filter(c=>!c.parentId).length<=1){showToast('⚠️ 최소 1개 카테고리가 필요해요');return;}
+  const kids=isTop?cats.filter(c=>c.parentId===id):[];
+  const msg=kids.length?`하위 세부 항목 ${kids.length}개도 함께 삭제돼요. 기존 내역의 카테고리 표시는 유지돼요.`:'기존 내역의 카테고리 표시는 유지돼요.';
+  showConfirm('카테고리를 삭제할까요?',msg,()=>{
+    kids.forEach(k=>repo.del(k.id));
+    repo.del(id);
+    renderGenericCatList(typeKey);showToast('🗑 삭제됐어요');
+  });
+}
+function openGenericCatEmojiPicker(typeKey,id){
+  const repo=repoForType(typeKey);const cur=repo.get().find(c=>c.id===id);
+  openEmojiPickerGeneric(cur?.emoji,(e)=>{repo.update(id,{emoji:e});renderGenericCatList(typeKey);});
+}
+
 function renderLearnedList(){
   const r=LearnedRepo.all();
   const entries=Object.entries(r);
@@ -2860,6 +2964,7 @@ function delSub(id){
 function exportData(){
   const data={
     exp:ExpRepo.all(),inc:IncRepo.all(),sav:SavRepo.all(),cats:CatRepo.get(),
+    inccats:IncCatRepo.get(),savcats:SavCatRepo.get(),
     goals:GoalRepo.all(),subs:SubRepo.all(),learned:LearnedRepo.all(),period:PeriodStore.current,
     exportedAt:new Date().toISOString()
   };
@@ -2883,13 +2988,15 @@ function importData(ev){
         // 클라우드 연동 중이면 가져오기 전에 기존 클라우드 데이터를 먼저 비운다.
         // 안 그러면 백업 파일에 없는 예전 문서가 실시간 동기화로 다시 섞여 들어온다.
         if(_db){
-          const collMap={exp:'expenses',inc:'income',sav:'saving',cats:'cats',goals:'goals',subs:'subs'};
+          const collMap={exp:'expenses',inc:'income',sav:'saving',cats:'cats',inccats:'inccats',savcats:'savcats',goals:'goals',subs:'subs'};
           for(const key in collMap){ if(data[key]) await cloudClearAll(collMap[key]); }
         }
         if(data.exp)ExpRepo.save(data.exp);
         if(data.inc)IncRepo.save(data.inc);
         if(data.sav)SavRepo.save(data.sav);
         if(data.cats)CatRepo.save(data.cats);
+        if(data.inccats)IncCatRepo.save(data.inccats);
+        if(data.savcats)SavCatRepo.save(data.savcats);
         if(data.goals)GoalRepo.save(data.goals);
         if(data.subs)SubRepo.save(data.subs);
         if(data.learned)localStorage.setItem('bh2_learned',JSON.stringify(data.learned));
@@ -3049,7 +3156,7 @@ function parseOcrText(text){
         type,
         amount,
         merchant:merchant.slice(0,30),
-        category:type==='inc'?(INC_CATS[0]?.name||'기타 수입'):classify(merchant),
+        category:type==='inc'?(IncCatRepo.topLevel()[0]?.name||'기타 수입'):classify(merchant),
         date:curDate,
         include:true
       });
@@ -3065,7 +3172,7 @@ function parseOcrText(text){
   document.getElementById('e-parsed').classList.add('on');
   renderOcrItems();
 }
-function ocrCatsFor(type){return type==='inc'?INC_CATS:CatRepo.get();}
+function ocrCatsFor(type){return type==='inc'?IncCatRepo.get():CatRepo.get();}
 // <select> 옵션을 대분류 → 그 아래 세부 항목 순으로, 세부 항목은 들여써서 나열
 function catSelectOptions(cats,selectedName){
   const tops=cats.filter(c=>!c.parentId);
