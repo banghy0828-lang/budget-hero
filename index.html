@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<script>
+/* 화면 깜빡임(FOUC) 방지 — CSS 파싱 전에 저장된 테마를 즉시 적용 */
+(function(){
+  try{
+    var t=localStorage.getItem('bh2_theme')||'system';
+    var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if(dark)document.documentElement.setAttribute('data-theme','dark');
+  }catch(e){}
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="robots" content="noindex, nofollow, noarchive">
@@ -22,6 +32,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+<link rel="manifest" href="manifest.json">
 <style>
 /* ═══════════════════════════════════════════════════════════════
    목차 — Ctrl+F로 아래 이름을 검색하면 해당 섹션으로 바로 이동합니다.
@@ -78,6 +90,48 @@
   --r-md:   13px;
   --r-sm:   9px;
   --blur-bg: rgba(250,249,248,.92);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:     #131315;
+    --bg2:    #1A1A1C;
+    --card:   #1E1E21;
+    --card2:  #27272A;
+    --card3:  #2D2D30;
+    --line:   #35353A;
+    --line2:  #2B2B2E;
+    --t1:     #F2F1EE;
+    --t2:     #ABA9A3;
+    --t3:     #75736D;
+    --purple: #D9A653;
+    --purp2:  #E6BA6E;
+    --green:  #4FBE85;
+    --red:    #E0685C;
+    --amber:  #D8CC5E;
+    --blue:   #63AEDD;
+    --on-color: #17171A;
+    --blur-bg: rgba(19,19,21,.85);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:     #131315;
+  --bg2:    #1A1A1C;
+  --card:   #1E1E21;
+  --card2:  #27272A;
+  --card3:  #2D2D30;
+  --line:   #35353A;
+  --line2:  #2B2B2E;
+  --t1:     #F2F1EE;
+  --t2:     #ABA9A3;
+  --t3:     #75736D;
+  --purple: #D9A653;
+  --purp2:  #E6BA6E;
+  --green:  #4FBE85;
+  --red:    #E0685C;
+  --amber:  #D8CC5E;
+  --blue:   #63AEDD;
+  --on-color: #17171A;
+  --blur-bg: rgba(19,19,21,.85);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -331,6 +385,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 /* ═══ SETTINGS ═══ */
 .s-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;margin:0 22px 16px}
 .s-title{font-size:11px;color:var(--t3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:18px}
+.theme-seg{display:flex;background:var(--bg2);border-radius:var(--r-md);padding:4px;gap:4px}
+.theme-opt{flex:1;text-align:center;padding:10px 0;border-radius:calc(var(--r-md) - 4px);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;transition:all .15s}
+.theme-opt.sel{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .cat-row{display:flex;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid var(--line2)}
 .cat-row:last-child{border-bottom:none;padding-bottom:0}
 .cat-row-sub{padding-left:22px;position:relative}
@@ -678,6 +735,17 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <!-- Manual -->
     <div id="exp-manual-wrap" style="display:none">
       <div class="field"><div class="f-lbl">금액</div><input class="f-in big-exp" id="em-amt" type="number" placeholder="0" min="0" inputmode="numeric" oninput="onEmChange()"></div>
+      <div id="em-items-toggle-wrap" style="margin:-10px 0 14px">
+        <div id="em-items-toggle-btn" onclick="toggleItemize()" style="font-size:12.5px;color:var(--purple);font-weight:700;cursor:pointer;display:inline-block">＋ 여러 항목으로 나눠 적기</div>
+      </div>
+      <div id="em-items-wrap" style="display:none;margin:-6px 0 16px;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:12px">
+        <div id="em-items-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button type="button" onclick="addItemRow()" style="width:100%;margin-top:8px;background:none;border:1.5px dashed var(--line);border-radius:var(--r-sm);padding:9px;font-size:12.5px;font-weight:600;color:var(--t3);cursor:pointer;font-family:inherit">＋ 항목 추가</button>
+        <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--t2);font-weight:700">
+          <span>항목 합계</span><span id="em-items-sum">₩0</span>
+        </div>
+        <div id="em-items-close" onclick="toggleItemize()" style="text-align:center;margin-top:8px;font-size:11.5px;color:var(--t3);cursor:pointer">세부 항목 그만 쓰기</div>
+      </div>
       <div class="field"><div class="f-lbl">상호명</div><input class="f-in" id="em-mer" type="text" placeholder="상호명" maxlength="30" oninput="onEmChange()"></div>
       <div class="field"><div class="f-lbl">날짜</div><div class="date-sel-wrap" id="em-date-wrap"></div></div>
       <div class="field"><div class="f-lbl">카테고리</div><div class="chips" id="em-cats"></div></div>
@@ -773,7 +841,19 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   </div>
 
   <div class="sec"><div class="sec-hdr"><div class="sec-title">목표 진행률</div></div><div id="goals-list"></div></div>
-  <div class="sec" style="margin-bottom:0"><div class="sec-hdr"><div class="sec-title">추천</div></div><div id="goal-reco"></div></div>
+  <div class="sec"><div class="sec-hdr"><div class="sec-title">추천</div></div><div id="goal-reco"></div></div>
+
+  <div class="sec" style="margin-bottom:0">
+    <div class="sec-hdr"><div class="sec-title">저축상품 추천</div></div>
+    <div class="s-card" style="margin:0 0 10px">
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1"><div class="f-lbl2">만 나이</div><input id="savprod-age" type="number" inputmode="numeric" placeholder="예: 27" oninput="renderSavProductReco()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5">나이 기준으로 신청 가능한 정부지원 저축상품을 안내해요. 소득 조건 등은 상품별로 따로 있어서, 자세한 자격은 아래 링크에서 직접 확인하셔야 해요.</div>
+    </div>
+    <div id="savprod-list"></div>
+    <a href="https://finlife.fss.or.kr/finlife/svcgd/svcRltnHom/list.do?menuNo=700001" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:10px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">🏦 전국 은행 예·적금 금리 비교 (금융감독원 공식) ↗</a>
+  </div>
 </div>
 
 <!-- ═══ STATS ═══ -->
@@ -854,6 +934,15 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   </div>
 
   <div class="s-card">
+    <div class="s-title">🌗 화면 테마</div>
+    <div class="theme-seg" id="theme-seg">
+      <div class="theme-opt" data-v="light" onclick="ThemeStore.set('light')">라이트</div>
+      <div class="theme-opt" data-v="dark" onclick="ThemeStore.set('dark')">다크</div>
+      <div class="theme-opt" data-v="system" onclick="ThemeStore.set('system')">시스템</div>
+    </div>
+  </div>
+
+  <div class="s-card">
     <div class="s-title">🔒 앱 잠금 (PIN)</div>
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="font-size:13px;color:var(--t2);font-weight:600" id="lock-status-text">PIN 잠금 사용 안 함</div>
@@ -863,6 +952,40 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       </div>
     </div>
     <div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.5">앱을 열 때마다 4자리 PIN을 입력해야 해요. PIN을 잊어도 가계부 데이터는 그대로 남아있고, PIN만 초기화돼요.</div>
+    <div id="biometric-row" style="display:none;align-items:center;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid var(--line2)">
+      <div style="font-size:13px;color:var(--t2);font-weight:600" id="bio-status-text">생체인증 (Face ID/지문) 미설정</div>
+      <button id="bio-btn" onclick="toggleBiometric()" style="background:var(--card2);border:1px solid var(--line);color:var(--t1);border-radius:20px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">설정</button>
+    </div>
+  </div>
+
+  <div class="s-card">
+    <div class="s-title">🔔 알림</div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:var(--t2);font-weight:600" id="notif-status-text">알림 꺼짐</div>
+      <button id="notif-btn" onclick="toggleNotifications()" style="background:var(--purple);color:var(--on-color);border:none;border-radius:20px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">켜기</button>
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-top:10px;line-height:1.5">앱을 열 때 지출 증가·구독 결제 알림 등을 브라우저 알림으로도 받아요. 앱이 완전히 꺼져 있을 땐 오지 않아요(백그라운드 알림은 아래 참고).</div>
+  </div>
+
+  <div class="s-card">
+    <div class="s-title">📡 백그라운드 푸시 (앱이 꺼져있어도)</div>
+    <div style="font-size:12px;color:var(--t3);line-height:1.6;margin-bottom:14px">앱을 열지 않아도 폰이 울리는 진짜 푸시예요. 서비스워커는 이미 준비돼 있고, 아래 2단계만 하면 켜져요:</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="width:20px;height:20px;flex-shrink:0;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--t2)">1</div>
+        <div style="font-size:12.5px;color:var(--t2);line-height:1.5">Firebase 콘솔에서 프로젝트를 <b>Blaze(종량제) 요금제</b>로 전환 (카드 등록 필요 — 실사용량은 무료 한도 안이라 실제 청구는 거의 0원)</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="width:20px;height:20px;flex-shrink:0;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--t2)">2</div>
+        <div style="font-size:12.5px;color:var(--t2);line-height:1.5">Firebase 콘솔 → 프로젝트 설정 → Cloud Messaging → &ldquo;웹 푸시 인증서&rdquo;에서 <b>VAPID 키</b> 발급 후 아래에 붙여넣기</div>
+      </div>
+    </div>
+    <input id="push-vapid-key" type="text" placeholder="여기에 VAPID 키를 붙여넣으세요" value="" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:12.5px;font-family:monospace;margin-bottom:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:var(--t2);font-weight:600" id="push-status-text">백그라운드 푸시 꺼짐</div>
+      <button id="push-btn" onclick="toggleBackgroundPush()" style="background:var(--purple);color:var(--on-color);border:none;border-radius:20px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">켜기</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:10px;line-height:1.5">실제로 알림을 &ldquo;보내는&rdquo; 서버 쪽 코드(누가 언제 결제일인지 매일 확인하는 부분)는 저장소 <code style="font-family:monospace">/functions</code> 폴더에 준비돼 있어요. 1번을 마치신 뒤 <code style="font-family:monospace">firebase deploy --only functions</code>까지 실행하셔야 실제로 알림이 옵니다.</div>
   </div>
 
   <div class="s-card">
@@ -897,6 +1020,36 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div id="learned-list" style="font-size:13px;color:var(--t2);line-height:2.2"></div>
     <button onclick="clearLearned()" style="margin-top:12px;background:rgba(192,67,46,.1);border:1px solid var(--red);color:var(--red);border-radius:var(--r-sm);padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">초기화</button>
   </div>
+  <div class="s-card">
+    <div class="s-title">🔁 반복 고정지출 자동 등록</div>
+    <div style="font-size:12px;color:var(--t3);line-height:1.6;margin:-6px 0 14px">월세·보험료·통신비처럼 매달 같은 날 같은 금액이 나가는 지출을 등록해두면, 그 날짜가 되면 앱을 열 때 자동으로 지출 내역에 기록돼요.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3)">월 합계</div>
+      <div style="font-size:17px;font-weight:800;font-variant-numeric:tabular-nums" id="recurring-total-monthly">₩0</div>
+    </div>
+    <div id="recurring-list" style="display:flex;flex-direction:column;gap:0;margin-bottom:12px"></div>
+    <button id="recurring-add-toggle" onclick="toggleRecurringForm()"
+      style="width:100%;background:none;border:1.5px dashed var(--line);border-radius:var(--r-md);padding:12px;font-size:13px;font-weight:600;color:var(--t3);cursor:pointer;font-family:inherit">＋ 반복 고정지출 추가</button>
+    <div id="recurring-add-form" style="display:none;margin-top:12px;background:var(--bg2);border-radius:var(--r-sm);padding:14px;border:1px solid var(--line2)">
+      <div style="margin-bottom:10px">
+        <div class="f-lbl2">이름</div>
+        <input id="recurring-f-name" type="text" placeholder="예: 월세, 통신비" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:14px;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1"><div class="f-lbl2">금액</div><input id="recurring-f-amount" type="number" inputmode="numeric" placeholder="0" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:14px;font-family:inherit"></div>
+        <div style="flex:1"><div class="f-lbl2">매월 며칠</div><input id="recurring-f-day" type="number" inputmode="numeric" min="1" max="28" placeholder="1~28" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:14px;font-family:inherit"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="f-lbl2">카테고리</div>
+        <select id="recurring-f-cat" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:14px;font-family:inherit"></select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="addRecurring()" style="flex:2;padding:10px;background:var(--purple);border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--on-color);cursor:pointer;font-family:inherit">등록</button>
+        <button onclick="toggleRecurringForm()" style="flex:1;padding:10px;background:var(--line);border:none;border-radius:var(--r-sm);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;font-family:inherit">취소</button>
+      </div>
+    </div>
+  </div>
+
   <div class="s-card">
     <div class="s-title">📺 구독 관리</div>
     <div style="font-size:12px;color:var(--t3);line-height:1.6;margin:-6px 0 14px">넷플릭스처럼 매달 나가는 결제를 등록해두면, '구독료' 카테고리로 지출을 기록할 때마다 자동으로 알아보고 이번 달 결제 여부를 표시해줘요. 매번 다시 입력할 필요가 없어요.</div>
@@ -1517,6 +1670,76 @@ const SubRepo={
   update(id,p){const a=this.all();const i=a.findIndex(s=>s.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a)}},
   del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)}
 };
+/* ═══════════════════════════ 반복 고정지출 자동 등록 ═══════════════════════════
+   월세·보험료·통신비처럼 매달 같은 날 같은 금액이 나가는 지출을 한 번만 등록해두면,
+   그 날짜가 되었을 때(앱을 여는 시점 기준) 자동으로 지출 내역에 추가된다.
+   SubRepo(구독)와 똑같은 저장 패턴이고, lastAppliedMonth로 같은 달에 중복 등록되는 것만 막는다. */
+const RecurringRepo={
+  _k:'bh2_recurring', _c:'recurring',
+  all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
+  save(a){localStorage.setItem(this._k,JSON.stringify(a));cloudSaveAll(this._c,a)},
+  add(r){const a=this.all();a.push(r);localStorage.setItem(this._k,JSON.stringify(a));cloudSet(this._c,r)},
+  update(id,p){const a=this.all();const i=a.findIndex(r=>r.id===id);if(i>-1){a[i]={...a[i],...p};this.save(a)}},
+  del(id){const a=this.all().filter(x=>x.id!==id);localStorage.setItem(this._k,JSON.stringify(a));cloudDel(this._c,id)},
+  /* 앱을 열 때마다 한 번 호출 — 오늘 날짜가 등록된 day 이상이고 이번 달에 아직 안 넣었으면 지출로 자동 추가 */
+  checkAndApply(){
+    const items=this.all();if(!items.length)return;
+    const todayStr=today_(),curYm=todayStr.slice(0,7),curDay=parseInt(todayStr.slice(8,10));
+    let appliedCount=0;
+    items.forEach(r=>{
+      if(r.lastAppliedMonth===curYm)return;
+      if(curDay<(r.day||1))return;
+      ExpRepo.add({id:uid(),amount:r.amount,merchant:r.name,category:r.category,date:todayStr,payment:r.payment||'자동이체',memo:'반복 고정지출 자동 등록',createdAt:new Date().toISOString()});
+      this.update(r.id,{lastAppliedMonth:curYm});
+      appliedCount++;
+    });
+    if(appliedCount>0)showToast(`🔁 반복 고정지출 ${appliedCount}건이 자동으로 기록됐어요`);
+  }
+};
+function renderRecurringList(){
+  const el=document.getElementById('recurring-list');if(!el)return;
+  const items=RecurringRepo.all();
+  const totalM=items.reduce((s,x)=>s+(x.amount||0),0);
+  const totalEl=document.getElementById('recurring-total-monthly');if(totalEl)totalEl.textContent=fmt(totalM);
+  if(!items.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--t3);font-size:13px">등록된 반복 고정지출이 없어요</div>';return;}
+  const curYm=today_().slice(0,7);
+  el.innerHTML=items.map(r=>{
+    const applied=r.lastAppliedMonth===curYm;
+    return`
+    <div class="cat-row">
+      <div class="cr-emo" style="cursor:default">${r.emoji||'🔁'}</div>
+      <div class="cr-body"><div style="font-size:14px;font-weight:700">${esc(r.name)}</div><div class="cr-spent">매월 ${r.day}일 · ${esc(r.category)}${applied?' · <span style="color:var(--green);font-weight:700">이번달 등록완료</span>':''}</div></div>
+      <div style="font-size:14px;font-weight:700;margin-right:6px;white-space:nowrap">${fmt(r.amount)}</div>
+      <button class="cr-del" onclick="delRecurring('${r.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+let recurringEmoji='🔁';
+function toggleRecurringForm(){
+  const f=document.getElementById('recurring-add-form');
+  const showing=f.style.display==='block';
+  f.style.display=showing?'none':'block';
+  if(!showing){
+    recurringEmoji='🔁';
+    ['recurring-f-name','recurring-f-amount','recurring-f-day'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+    const catSel=document.getElementById('recurring-f-cat');
+    if(catSel)catSel.innerHTML=CatRepo.get().map(c=>`<option value="${esc(c.name)}">${c.emoji||'📦'} ${esc(c.name)}</option>`).join('');
+  }
+}
+function addRecurring(){
+  const name=document.getElementById('recurring-f-name').value.trim();
+  const amount=parseInt(document.getElementById('recurring-f-amount').value);
+  const day=Math.min(28,Math.max(1,parseInt(document.getElementById('recurring-f-day').value)||1));
+  const category=document.getElementById('recurring-f-cat').value;
+  if(!name||!amount||amount<=0){showToast('⚠️ 이름과 올바른 금액을 입력해주세요');return;}
+  RecurringRepo.add({id:uid(),name,amount,day,category,emoji:recurringEmoji,lastAppliedMonth:null});
+  toggleRecurringForm();
+  renderRecurringList();
+  showToast('✅ 반복 고정지출이 등록됐어요');
+}
+function delRecurring(id){
+  showConfirm('반복 고정지출을 삭제할까요?','다음 달부터 자동 등록되지 않아요.',()=>{RecurringRepo.del(id);renderRecurringList();showToast('🗑 삭제됐어요');});
+}
 /* ═══════════════════════════ SHADOW BACKUP ═══════════════════════════
    로컬 저장 모드(클라우드 미연결)에서도 최소한의 안전망을 두기 위한 이중 저장.
    실제 데이터 키(bh2_exp 등)와는 별개의 키(bh2_shadow)에 스냅샷을 주기적으로 남겨두고,
@@ -1844,6 +2067,7 @@ function renderHome(){
   document.getElementById('insight-pill').innerHTML=weekdayInsight()||genInsight(exp,pexp,inc,pinc,sav,budget);
   renderPeriodBadge('home-period-badge');
   renderHomeAlerts(exp,pexp);
+  notifyIfNeeded(exp,pexp);
   renderCatProg('home-cat-prog',el,pel);
   renderRecent('h-rec-exp',el.slice(0,4),'exp');
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
@@ -2142,6 +2366,56 @@ function initExpForm(){
   document.getElementById('eq-parsed').classList.remove('on');
   renderChips('em-cats',cats,'em','sel-exp');
   resetOcr();
+  resetItemize();
+}
+/* ═══════════════════════════ 세부 항목(한 지출을 여러 줄로 나눠 적기) ═══════════════════════════
+   편의점 영수증처럼 한 번 결제했지만 내용물이 여러 개일 때, 항목별 이름+금액을 따로 적으면
+   합계가 자동으로 금액란에 채워진다. 항목 자체는 memo에 "품목1 1,000 · 품목2 2,000" 형태로
+   합쳐 넣어서, 기존 화면(내역·상세보기 등)을 하나도 안 고치고도 어디서나 그대로 보이게 한다. */
+let _expItems=[];
+function resetItemize(){
+  _expItems=[];
+  document.getElementById('em-items-wrap').style.display='none';
+  document.getElementById('em-items-toggle-wrap').style.display='block';
+  document.getElementById('em-items-list').innerHTML='';
+  const amtEl=document.getElementById('em-amt');amtEl.readOnly=false;amtEl.style.opacity='1';
+}
+function toggleItemize(){
+  const wrap=document.getElementById('em-items-wrap');
+  const showing=wrap.style.display==='block';
+  if(showing){resetItemize();onEmChange();return;}
+  wrap.style.display='block';
+  document.getElementById('em-items-toggle-wrap').style.display='none';
+  if(!_expItems.length){_expItems=[{label:'',amount:null},{label:'',amount:null}];}
+  renderItemRows();
+}
+function renderItemRows(){
+  document.getElementById('em-items-list').innerHTML=_expItems.map((it,i)=>`
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="text" placeholder="품목명" value="${esc(it.label||'')}" oninput="updateItemRow(${i},'label',this.value)" style="flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:13px;font-family:inherit">
+      <input type="number" placeholder="0" inputmode="numeric" value="${it.amount||''}" oninput="updateItemRow(${i},'amount',this.value)" style="width:100px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:13px;font-family:inherit">
+      <div onclick="delItemRow(${i})" style="width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3);cursor:pointer;font-size:14px">✕</div>
+    </div>`).join('');
+  recalcItemsSum();
+}
+function updateItemRow(i,field,val){
+  _expItems[i][field]=field==='amount'?(parseInt(val)||null):val;
+  recalcItemsSum();
+}
+function addItemRow(){_expItems.push({label:'',amount:null});renderItemRows();}
+function delItemRow(i){_expItems.splice(i,1);if(!_expItems.length)_expItems.push({label:'',amount:null});renderItemRows();}
+function recalcItemsSum(){
+  const sum=_expItems.reduce((s,it)=>s+(it.amount||0),0);
+  document.getElementById('em-items-sum').textContent=fmt(sum);
+  const amtEl=document.getElementById('em-amt');
+  amtEl.value=sum;amtEl.readOnly=true;amtEl.style.opacity='.7';
+  onEmChange();
+}
+/* 항목별 내용을 "품목 금액 · 품목 금액" 문자열로 합쳐서 memo 자동 채움 — 값이 있는 항목만 포함 */
+function itemsToMemo(){
+  const valid=_expItems.filter(it=>it.label&&it.label.trim()&&it.amount>0);
+  if(!valid.length)return null;
+  return valid.map(it=>`${it.label.trim()} ${fmt(it.amount)}`).join(' · ');
 }
 function setExpMode(m){
   ['ocr','quick','manual'].forEach(x=>{
@@ -2157,10 +2431,14 @@ function onEmChange(){
 }
 function saveExp(){
   const amt=parseInt(document.getElementById('em-amt').value),mer=document.getElementById('em-mer').value;
-  const date=getDateStr('em-date'),cat=selCat.em,pay=selPay.em,memo=document.getElementById('em-memo').value;
+  const date=getDateStr('em-date'),cat=selCat.em,pay=selPay.em;
+  let memo=document.getElementById('em-memo').value;
+  const itemsMemo=itemsToMemo();
+  if(itemsMemo)memo=memo?memo+' · '+itemsMemo:itemsMemo;
   if(!amt||amt<=0||!mer){showToast('⚠️ 올바른 금액과 상호명을 입력해주세요');return;}
   if(cat!==classify(mer)){const catObj=CatRepo.get().find(c=>c.name===cat);if(catObj)LearnedRepo.set(mer,catObj.id);}
-  ExpRepo.add({id:uid(),amount:amt,merchant:mer,category:cat,date:date||today_(),payment:pay,memo,createdAt:new Date().toISOString()});
+  const items=itemsMemo?_expItems.filter(it=>it.label&&it.label.trim()&&it.amount>0):undefined;
+  ExpRepo.add({id:uid(),amount:amt,merchant:mer,category:cat,date:date||today_(),payment:pay,memo,items,createdAt:new Date().toISOString()});
   const askedSub=handleSubscriptionExpense(cat,mer,date,amt);
   if(!askedSub)showToast('✅ 지출 기록 완료!');
   navTo('home');
@@ -2448,10 +2726,70 @@ function renderGoalsPage(){
   if(!goals.length){
     gl.innerHTML=`<div class="empty"><div class="empty-e">🎯</div><div class="empty-t">목표가 없어요</div><div class="empty-s">우측 상단 ＋ 버튼으로 저축 목표를 추가해 보세요</div></div>`;
     document.getElementById('goal-reco').innerHTML='';
+    renderSavProductReco();
     return;
   }
   gl.innerHTML=goals.map(g=>buildGoalCard(g)).join('');
   renderGoalRecommendation(goals);
+  renderSavProductReco();
+}
+/* ═══════════════════════════ 저축상품 추천 (정부지원) ═══════════════════════════
+   금리·상품이 매일 바뀌는 은행 예·적금은 잘못된 숫자를 박아넣느니 공식 비교 사이트로
+   링크만 걸어둔다(위 HTML의 finlife.fss.or.kr 버튼). 대신 조건이 자주 안 바뀌는
+   전국 단위 정부지원 상품 2개는 나이 조건으로 바로 자격을 걸러서 보여준다.
+   출처: 2026년 기준 각 상품 안내(하단 note에 명시). 정확한 소득 조건 등은 상품별로
+   따로 있어서 이 화면만으로 최종 자격을 확정하지 않는다 — 반드시 공식 페이지 재확인 필요. */
+const GOV_SAVINGS_PRODUCTS=[
+  {
+    id:'youth-tomorrow',
+    name:'청년내일저축계좌',
+    ageMin:15,ageMax:39,
+    summary:'매달 10만원 저축하면 정부가 소득 수준에 따라 월 10~30만원을 추가 적립. 3년 유지 시 최대 1,440만원 이상 수령.',
+    note:'소득 수준(차상위 이하/기준중위소득 100% 이하 등)에 따라 정부 지원금이 달라짐. 근로·사업소득 요건 있음.',
+    link:'https://www.gov.kr'
+  },
+  {
+    id:'youth-future',
+    name:'청년미래적금',
+    ageMin:19,ageMax:34,
+    summary:'월 최대 50만원 저축 시 정부가 납입금의 6~12%를 추가 기여, 최대 2,255만원까지 목돈 마련 가능.',
+    note:'개인소득 7,500만원 이하(종합소득 6,300만원 이하), 기준중위소득 200% 이하(맞벌이 2인 가구 250% 이하) 조건. 신청 기간이 연 1~2회로 한정돼 있어 시기를 놓치면 다음 회차까지 기다려야 함.',
+    link:'https://www.gov.kr'
+  }
+];
+function renderSavProductReco(){
+  const el=document.getElementById('savprod-list');if(!el)return;
+  const ageInput=document.getElementById('savprod-age');
+  let ageVal=ageInput?ageInput.value:'';
+  if(!ageVal){
+    try{ageVal=localStorage.getItem('bh2_profile_age')||'';}catch(e){ageVal='';}
+    if(ageVal&&ageInput)ageInput.value=ageVal;
+  }
+  if(ageVal)try{localStorage.setItem('bh2_profile_age',ageVal)}catch(e){}
+  const age=parseInt(ageVal);
+  if(!age||age<=0){
+    el.innerHTML=`<div class="empty" style="padding:20px 0"><div class="empty-e">🎯</div><div class="empty-t">나이를 입력하면 신청 가능한 상품을 알려드려요</div></div>`;
+    return;
+  }
+  const eligible=GOV_SAVINGS_PRODUCTS.filter(p=>age>=p.ageMin&&age<=p.ageMax);
+  const ineligible=GOV_SAVINGS_PRODUCTS.filter(p=>!(age>=p.ageMin&&age<=p.ageMax));
+  let html='';
+  if(eligible.length){
+    html+=eligible.map(p=>`
+      <div class="cat-row" style="align-items:flex-start;padding:16px">
+        <div class="cr-emo" style="cursor:default;background:rgba(46,139,87,.12)">🎯</div>
+        <div class="cr-body">
+          <div style="display:flex;align-items:center;gap:6px"><span style="font-size:14px;font-weight:700">${esc(p.name)}</span><span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(46,139,87,.12);border-radius:20px;padding:2px 8px">신청 가능 나이</span></div>
+          <div class="cr-spent" style="white-space:normal;line-height:1.5;margin-top:4px">${esc(p.summary)}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:6px;line-height:1.5">${esc(p.note)}</div>
+        </div>
+      </div>`).join('');
+  }
+  if(ineligible.length){
+    html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 6px">나이 조건에 안 맞는 상품</div>`+
+      ineligible.map(p=>`<div class="cat-row" style="opacity:.5"><div class="cr-emo" style="cursor:default">🔒</div><div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">만 ${p.ageMin}~${p.ageMax}세만 신청 가능</div></div></div>`).join('');
+  }
+  el.innerHTML=html;
 }
 /* 이번 기간 지출 중 예산 대비 가장 많이 초과했거나(예산 미설정이면 가장 많이 쓴) 카테고리를
    짚어주고, 거기서 얼마를 줄이면 저축 목표 달성이 몇 개월 당겨지는지 보여준다.
@@ -2748,6 +3086,11 @@ function renderSettings(){
   renderLearnedList();
   renderSubscriptions();
   renderBackupReminder();
+  ThemeStore.renderUI();
+  NotifStore.renderUI();
+  renderBiometricUI();
+  renderRecurringList();
+  PushStore.renderUI();
 }
 /* 대분류(생활비 등) 아래에 세부 항목(커피비·미용비 등)을 접어 넣는 카테고리 설정 목록.
    예산은 대분류에만 있고, 세부 항목은 그 예산을 쪼개 쓰는 용도라 별도 예산 입력은 없다. */
@@ -3383,13 +3726,198 @@ function renderLockSettingStatus(){
   document.getElementById('lock-remove-btn').style.display=set?'inline-block':'none';
 }
 
+/* ═══════════════════════════ 화면 테마 (다크모드) ═══════════════════════════
+   'light'|'dark'|'system' 세 값 중 하나를 저장. 실제 적용은 head의 인라인 스크립트가
+   파싱 초기에 한 번 하고, 여기서는 설정 화면에서 바꿀 때만 다시 적용한다. */
+const ThemeStore={
+  _k:'bh2_theme',
+  get(){return localStorage.getItem(this._k)||'system'},
+  set(v){
+    localStorage.setItem(this._k,v);
+    this.apply();
+    this.renderUI();
+  },
+  apply(){
+    const v=this.get();
+    const dark=v==='dark'||(v==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);
+    if(dark)document.documentElement.setAttribute('data-theme','dark');
+    else document.documentElement.removeAttribute('data-theme');
+  },
+  renderUI(){
+    const cur=this.get();
+    document.querySelectorAll('#theme-seg .theme-opt').forEach(el=>el.classList.toggle('sel',el.dataset.v===cur));
+  }
+};
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(ThemeStore.get()==='system')ThemeStore.apply();});}catch(e){}
+
+/* ═══════════════════════════ 알림 (인앱, Notification API) ═══════════════════════════
+   서비스워커 없이 쓰는 로컬 알림이라 앱을 실제로 열었을 때만 울린다.
+   백그라운드(앱이 꺼진 상태) 알림은 별도 기능(푸시)이 필요 — 아래 PushStore 참고. */
+const NotifStore={
+  _k:'bh2_notif_on',
+  isOn(){return localStorage.getItem(this._k)==='1'&&typeof Notification!=='undefined'&&Notification.permission==='granted'},
+  async request(){
+    if(typeof Notification==='undefined'){showToast('⚠️ 이 브라우저는 알림을 지원하지 않아요');return false;}
+    const perm=await Notification.requestPermission();
+    return perm==='granted';
+  },
+  fire(title,body){
+    if(!this.isOn())return;
+    try{new Notification(title,{body,icon:'icon-192.png'});}catch(e){}
+  },
+  renderUI(){
+    const on=this.isOn();
+    document.getElementById('notif-status-text').textContent=on?'🔔 알림 켜짐':'알림 꺼짐';
+    document.getElementById('notif-btn').textContent=on?'끄기':'켜기';
+  }
+};
+async function toggleNotifications(){
+  if(NotifStore.isOn()){
+    localStorage.setItem(NotifStore._k,'0');
+    showToast('알림을 껐어요');
+  }else{
+    const ok=await NotifStore.request();
+    if(ok){localStorage.setItem(NotifStore._k,'1');showToast('✅ 알림이 켜졌어요');}
+    else showToast('⚠️ 알림 권한이 거부됐어요. 브라우저 설정에서 허용해주세요');
+  }
+  NotifStore.renderUI();
+}
+/* 홈 화면 렌더 시점에 부를 훅 — 지출 급증/구독 결제 경고가 뜨는 순간 그대로 알림으로도 보낸다 */
+function notifyIfNeeded(exp,pexp){
+  if(!NotifStore.isOn())return;
+  if(pexp>0){
+    const diff=exp-pexp,pct=Math.round(Math.abs(diff)/pexp*100);
+    if(diff>0&&pct>=10)NotifStore.fire('⚠️ 지출이 늘었어요',`이전 기간보다 ${fmt(diff)}(${pct}%) 더 썼어요.`);
+  }
+}
+
+/* ═══════════════════════════ 생체인증 (WebAuthn) ═══════════════════════════
+   서버가 없는 순수 클라이언트 앱이라, 진짜 서버 검증 대신 "이 기기에 등록된
+   플랫폼 인증(Face ID/지문)을 통과했다"는 사실 자체를 잠금 해제 신호로 쓴다.
+   즉, PIN을 완전히 대체하는 게 아니라 "생체인증 성공 시 PIN 입력을 건너뛰는" 보조 수단. */
+const BiometricStore={
+  _k:'bh2_bio_cred',
+  isSet(){return !!localStorage.getItem(this._k)},
+  async supported(){
+    if(!window.PublicKeyCredential)return false;
+    try{return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();}catch(e){return false;}
+  },
+  async register(){
+    const challenge=crypto.getRandomValues(new Uint8Array(32));
+    const userId=crypto.getRandomValues(new Uint8Array(16));
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge,
+      rp:{name:'Budget Hero'},
+      user:{id:userId,name:'budgethero-user',displayName:'Budget Hero'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+      timeout:60000
+    }});
+    if(!cred)throw new Error('no credential');
+    localStorage.setItem(this._k,btoa(String.fromCharCode(...new Uint8Array(cred.rawId))));
+  },
+  async verify(){
+    const idB64=localStorage.getItem(this._k);if(!idB64)return false;
+    const rawId=Uint8Array.from(atob(idB64),c=>c.charCodeAt(0));
+    const challenge=crypto.getRandomValues(new Uint8Array(32));
+    try{
+      const assertion=await navigator.credentials.get({publicKey:{
+        challenge,allowCredentials:[{id:rawId,type:'public-key'}],userVerification:'required',timeout:60000
+      }});
+      return !!assertion;
+    }catch(e){return false;}
+  },
+  clear(){localStorage.removeItem(this._k)}
+};
+async function renderBiometricUI(){
+  const row=document.getElementById('biometric-row');if(!row)return;
+  const ok=await BiometricStore.supported();
+  if(!ok||!LockStore.isSet()){row.style.display='none';return;}
+  row.style.display='flex';
+  const set=BiometricStore.isSet();
+  document.getElementById('bio-status-text').textContent=set?'🟢 생체인증으로 잠금해제 가능':'생체인증 (Face ID/지문) 미설정';
+  document.getElementById('bio-btn').textContent=set?'해제':'설정';
+}
+async function toggleBiometric(){
+  if(BiometricStore.isSet()){
+    BiometricStore.clear();showToast('생체인증을 해제했어요');renderBiometricUI();return;
+  }
+  try{
+    await BiometricStore.register();
+    showToast('✅ 생체인증이 설정됐어요');
+  }catch(e){
+    showToast('⚠️ 생체인증 등록에 실패했어요 (기기가 지원하지 않거나 취소됨)');
+  }
+  renderBiometricUI();
+}
+/* 잠금화면 열릴 때 생체인증이 설정돼 있으면 먼저 자동으로 시도, 실패/미설정이면 PIN 키패드로 폴백 */
+async function tryBiometricUnlock(){
+  if(!BiometricStore.isSet())return;
+  const ok=await BiometricStore.verify();
+  if(ok){
+    document.getElementById('lock-screen').classList.remove('on');
+    _lockInput='';_lockFailCount=0;
+  }
+}
+
+/* ═══════════════════════════ 백그라운드 푸시 (FCM) ═══════════════════════════
+   클라이언트 쪽(서비스워커 등록, 토큰 발급)은 여기서 끝까지 구현돼 있다.
+   다만 실제로 "알림을 보내는" 서버 쪽(/functions)은 Firebase Blaze 요금제 전환과
+   VAPID 키 발급이 사용자의 계정 조작을 필요로 해서 나 혼자 완료할 수 없다 —
+   토큰 발급까지 성공하면 클라이언트 준비는 끝난 것이고, 나머지는 설정 카드의 안내를 따르면 된다. */
+const PushStore={
+  _k:'bh2_push_on',
+  isOn(){return localStorage.getItem(this._k)==='1'},
+  renderUI(){
+    const on=this.isOn();
+    document.getElementById('push-status-text').textContent=on?'📡 백그라운드 푸시 켜짐':'백그라운드 푸시 꺼짐';
+    document.getElementById('push-btn').textContent=on?'끄기':'켜기';
+    const vk=localStorage.getItem('bh2_push_vapid');
+    const vkEl=document.getElementById('push-vapid-key');
+    if(vkEl&&vk)vkEl.value=vk;
+  }
+};
+async function toggleBackgroundPush(){
+  if(PushStore.isOn()){
+    localStorage.setItem(PushStore._k,'0');
+    showToast('백그라운드 푸시를 껐어요');
+    PushStore.renderUI();
+    return;
+  }
+  const cfgRaw=localStorage.getItem('bh2_firebase_config');
+  const vapidKey=document.getElementById('push-vapid-key').value.trim();
+  if(!cfgRaw){showToast('⚠️ 먼저 위쪽 클라우드 동기화(Firebase)를 연결해주세요');return;}
+  if(!vapidKey){showToast('⚠️ VAPID 키를 먼저 붙여넣어주세요 (안내 1·2단계 참고)');return;}
+  if(!('serviceWorker' in navigator)){showToast('⚠️ 이 브라우저는 백그라운드 푸시를 지원하지 않아요');return;}
+  try{
+    localStorage.setItem('bh2_push_vapid',vapidKey);
+    const swUrl='firebase-messaging-sw.js?cfg='+encodeURIComponent(cfgRaw);
+    const reg=await navigator.serviceWorker.register(swUrl);
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){showToast('⚠️ 알림 권한이 거부됐어요');return;}
+    if(firebase.apps.length===0)firebase.initializeApp(JSON.parse(cfgRaw));
+    const messaging=firebase.messaging();
+    const token=await messaging.getToken({vapidKey,serviceWorkerRegistration:reg});
+    if(!token)throw new Error('no token');
+    if(_db&&_userId)await _db.doc(`users/${_userId}/meta/fcmToken`).set({token,updatedAt:new Date().toISOString()});
+    localStorage.setItem(PushStore._k,'1');
+    showToast('✅ 백그라운드 푸시 클라이언트 준비 완료! 서버 배포(안내 참고)까지 해야 실제로 알림이 와요');
+  }catch(e){
+    showToast('⚠️ 설정 실패: VAPID 키가 정확한지, Blaze 요금제인지 확인해주세요');
+  }
+  PushStore.renderUI();
+}
+
 /* ═══════════════════════════ INIT ═══════════════════════════ */
 document.addEventListener('DOMContentLoaded',()=>{
   PeriodStore.load();
   tryAutoConnectFirebase();
   checkForDataLoss();
+  RecurringRepo.checkAndApply();
   renderHome();
   initLockScreen();
+  if(document.getElementById('lock-screen').classList.contains('on'))tryBiometricUnlock();
+  if(typeof Notification!=='undefined'&&Notification.permission!=='granted')localStorage.setItem(NotifStore._k,'0');
 });
 // 앱을 백그라운드로 보냈다가 5초 넘게 지나서 돌아오면 다시 잠금
 document.addEventListener('visibilitychange',()=>{
