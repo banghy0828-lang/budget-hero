@@ -1747,6 +1747,43 @@ function addRecurring(){
 function delRecurring(id){
   showConfirm('반복 고정지출을 삭제할까요?','다음 달부터 자동 등록되지 않아요.',()=>{RecurringRepo.del(id);renderRecurringList();showToast('🗑 삭제됐어요');});
 }
+/* ═══════════════════════════ 정부지원 저축상품 관심등록 + 신청기간 알림 ═══════════════════════════
+   관심상품으로 등록해두면, 그 상품의 다음 모집 시작일이 7일 이내로 다가왔을 때
+   (인앱 알림이 켜져 있다는 전제 하에) 한 번 알려준다. 같은 회차에 중복으로 울리지 않도록
+   notifiedWindowStart에 마지막으로 알림 보낸 회차의 시작일을 기록해둔다. */
+const GovSavWatchRepo={
+  _k:'bh2_govsav_watch',
+  all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
+  save(a){localStorage.setItem(this._k,JSON.stringify(a));try{cloudSaveAll('govSavWatch',a)}catch(e){}},
+  isWatched(id){return this.all().some(w=>w.id===id)},
+  toggle(id){
+    let a=this.all();
+    if(a.some(w=>w.id===id))a=a.filter(w=>w.id!==id);
+    else a.push({id,notifiedWindowStart:null});
+    this.save(a);
+  }
+};
+function toggleGovSavWatch(id){
+  GovSavWatchRepo.toggle(id);
+  const p=GOV_SAVINGS_PRODUCTS.find(x=>x.id===id);
+  showToast(GovSavWatchRepo.isWatched(id)?`★ ${p?p.name:''} 관심상품 등록`:'관심상품 해제');
+  renderSavProductReco();
+}
+/* 앱을 열 때마다 한 번씩 확인 — 관심 등록한 상품 중 다음 모집 시작이 7일 이내인 게 있으면 알림 */
+function checkGovSavReminders(){
+  const watch=GovSavWatchRepo.all();if(!watch.length)return;
+  let changed=false;
+  watch.forEach(w=>{
+    const p=GOV_SAVINGS_PRODUCTS.find(x=>x.id===w.id);if(!p)return;
+    const st=savProductStatus(p);
+    if(st.cls==='upcoming'&&st.daysUntil!==null&&st.daysUntil<=7&&w.notifiedWindowStart!==st.window.start){
+      NotifStore.fire(`⏰ ${p.name} 신청 ${st.daysUntil}일 전`,`관심 등록하신 상품이에요. ${st.window.start}부터 신청 시작이에요.`);
+      w.notifiedWindowStart=st.window.start;
+      changed=true;
+    }
+  });
+  if(changed)GovSavWatchRepo.save(watch);
+}
 /* ═══════════════════════════ SHADOW BACKUP ═══════════════════════════
    로컬 저장 모드(클라우드 미연결)에서도 최소한의 안전망을 두기 위한 이중 저장.
    실제 데이터 키(bh2_exp 등)와는 별개의 키(bh2_shadow)에 스냅샷을 주기적으로 남겨두고,
@@ -2774,14 +2811,51 @@ const GOV_SAVINGS_PRODUCTS=[
     lastWindowPassed:true,
     nextWindow:'2026년 12월 중',
     link:'https://www.gov.kr'
+  },
+  {
+    id:'hope-savings-1',
+    name:'희망저축계좌 Ⅰ유형',
+    ageMin:0,ageMax:120,
+    benefit:'매달 10만원 이상 저축 → 정부가 월 30만원 매칭 적립',
+    result:'3년 유지 시 본인저축+정부지원 합쳐 1,000만원대 이상',
+    income:'생계급여 또는 의료급여 수급 가구 중 근로활동 가구 (나이 제한 없음, 가구 소득·수급 기준)',
+    other:'3년간 근로활동 유지 + 만기 시 소득이 일정 수준을 넘어야 지급(탈수급 목표)',
+    cycle:'연 4회 모집 (3월·6월·9월·11월)',
+    windows:[{start:'2026-03-03',end:'2026-03-13'},{start:'2026-06-01',end:'2026-06-15'},{start:'2026-09-01',end:'2026-09-14'},{start:'2026-11-02',end:'2026-11-16'}],
+    link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
+  },
+  {
+    id:'hope-savings-2',
+    name:'희망저축계좌 Ⅱ유형',
+    ageMin:0,ageMax:120,
+    benefit:'매달 10만원 이상 저축 → 1년차 10만원·2년차 20만원·3년차 30만원 매칭',
+    result:'3년 적립 시 정부지원금 총 720만원',
+    income:'기준중위소득 50% 이하, 주거·교육급여 수급 또는 차상위계층 (자격 범위 넓음)',
+    other:'자립역량교육 10시간 이수 + 자금사용계획서 제출이 만기조건',
+    cycle:'희망저축계좌Ⅰ과 비슷한 시기에 모집 (정확한 회차는 자산형성포털에서 확인 필요)',
+    nextWindowUnknown:true,
+    link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
   }
 ];
-/* 모집 시기 상태를 오늘 날짜 기준으로 계산 — "모집중"인지 "마감(다음 예정)"인지를
-   나이 자격과 별개로 항상 같이 보여준다. 지금은 두 상품 다 lastWindowPassed로 수동
-   표기하지만, 다음 검증 때(1.5절 최신화 주기) 실제 오늘 날짜와 비교해서 갱신하면 된다. */
+/* 모집 시기 상태를 "오늘" 기준으로 실시간 계산한다 — 이전엔 사람이 손으로 true/false를
+   박아넣었는데, 그러면 시간이 지나면 무조건 틀린 정보가 된다. 대신 실제 모집기간
+   배열(windows)을 넣어두고, 오늘 날짜와 비교해서 모집중/모집예정/마감을 매번 새로 계산한다.
+   정확한 날짜를 못 구한 상품(nextWindowUnknown)만 예외적으로 문구 안내로 대체한다. */
 function savProductStatus(p){
-  if(p.lastWindowPassed)return{label:`마감 · 다음 ${p.nextWindow}`,cls:'closed'};
-  return{label:`모집중 (${p.lastWindow})`,cls:'open'};
+  if(!p.windows||!p.windows.length){
+    return p.nextWindowUnknown?{label:'모집 시기 별도 확인 필요',cls:'unknown',daysUntil:null}:{label:`마감 · 다음 ${p.nextWindow}`,cls:'closed',daysUntil:null};
+  }
+  const todayStr=today_();
+  for(const w of p.windows){
+    if(todayStr>=w.start&&todayStr<=w.end)return{label:`🟢 모집중 (~${w.end.slice(5).replace('-','.')})`,cls:'open',daysUntil:0,window:w};
+  }
+  const future=p.windows.filter(w=>w.start>todayStr).sort((a,b)=>a.start<b.start?-1:1);
+  if(future.length){
+    const next=future[0];
+    const days=Math.round((new Date(next.start)-new Date(todayStr))/86400000);
+    return{label:`모집예정 · D-${days} (${next.start.slice(5).replace('-','.')}~)`,cls:'upcoming',daysUntil:days,window:next};
+  }
+  return{label:'마감 · 다음 일정 미정',cls:'closed',daysUntil:null};
 }
 /* 정부지원 상품은 통합 API가 없어 수작업으로 채워넣은 데이터라, "언제 확인한 정보인지"를
    화면에 항상 같이 보여준다. 3개월(분기)마다 한 번씩 다시 검색해서 이 날짜를 갱신하는 걸
@@ -2830,8 +2904,10 @@ function renderSavProductReco(){
   if(eligible.length){
     html+=eligible.map(p=>{
       const st=savProductStatus(p);
-      const stColor=st.cls==='open'?'var(--green)':'var(--t3)';
-      const stBg=st.cls==='open'?'rgba(46,139,87,.12)':'var(--card3)';
+      const stColors={open:['var(--green)','rgba(46,139,87,.12)'],upcoming:['var(--purple)','rgba(212,148,31,.12)'],closed:['var(--t3)','var(--card3)'],unknown:['var(--t3)','var(--card3)']};
+      const[stColor,stBg]=stColors[st.cls]||stColors.closed;
+      const ageRow=(p.ageMin===0&&p.ageMax>=100)?'가구 소득·수급 기준 (연령 제한 없음)':`만 ${p.ageMin}~${p.ageMax}세`;
+      const watched=GovSavWatchRepo.isWatched(p.id);
       return`
       <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:12px">
@@ -2839,18 +2915,21 @@ function renderSavProductReco(){
           <span style="font-size:10.5px;font-weight:700;color:${stColor};background:${stBg};border-radius:20px;padding:3px 10px;white-space:nowrap">${esc(st.label)}</span>
         </div>
         <div style="display:grid;grid-template-columns:64px 1fr;gap:6px 10px;font-size:12.5px">
-          <div style="color:var(--t3);font-weight:700">대상</div><div>만 ${p.ageMin}~${p.ageMax}세</div>
+          <div style="color:var(--t3);font-weight:700">대상</div><div>${ageRow}</div>
           <div style="color:var(--t3);font-weight:700">지원내용</div><div>${esc(p.benefit)}${p.result?`<br><span style="color:var(--purple);font-weight:700">${esc(p.result)}</span>`:''}</div>
           <div style="color:var(--t3);font-weight:700">소득조건</div><div>${esc(p.income)}</div>
           ${p.other?`<div style="color:var(--t3);font-weight:700">기타</div><div>${esc(p.other)}</div>`:''}
           <div style="color:var(--t3);font-weight:700">모집주기</div><div>${esc(p.cycle)}</div>
         </div>
-        <a href="${p.link}" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:12px;padding:10px;background:var(--bg2);border-radius:var(--r-sm);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">공식 안내 페이지 ↗</a>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button onclick="toggleGovSavWatch('${p.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
+          <a href="${p.link}" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r-sm);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">공식 안내 ↗</a>
+        </div>
       </div>`;
     }).join('');
   }
   if(ineligible.length){
-    html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 6px">나이 조건에 안 맞는 상품</div>`+
+    html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 6px">나이/가구 조건에 안 맞는 상품</div>`+
       ineligible.map(p=>`<div class="cat-row" style="opacity:.5"><div class="cr-emo" style="cursor:default">🔒</div><div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">만 ${p.ageMin}~${p.ageMax}세만 신청 가능 · ${esc(savProductStatus(p).label)}</div></div></div>`).join('');
   }
   el.innerHTML=html;
@@ -3978,6 +4057,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   tryAutoConnectFirebase();
   checkForDataLoss();
   RecurringRepo.checkAndApply();
+  checkGovSavReminders();
   renderHome();
   initLockScreen();
   if(document.getElementById('lock-screen').classList.contains('on'))tryBiometricUnlock();
