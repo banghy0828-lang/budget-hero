@@ -2837,6 +2837,16 @@ const GOV_SAVINGS_PRODUCTS=[
     link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
   }
 ];
+/* 보건복지부 자산형성포털(hope.welfareinfo.or.kr) 기준으로, 지금은 신규가입이 끊긴
+   과거 사업들 — 추천 대상은 아니지만 "최대한 다 보여달라"는 요청이라 참고용으로 남겨둔다.
+   신규가입 불가라는 걸 명확히 표시해서, 헷갈려서 신청 시도하는 일이 없게 한다. */
+const GOV_SAVINGS_CLOSED=[
+  {name:'희망키움통장 Ⅰ',note:'생계·의료급여 수급가구 대상 — 희망저축계좌Ⅰ의 전신'},
+  {name:'희망키움통장 Ⅱ',note:'차상위계층 대상 — 희망저축계좌Ⅱ의 전신'},
+  {name:'내일키움통장',note:'자활근로사업 참여자 대상'},
+  {name:'청년희망키움통장',note:'청년내일저축계좌의 전신'},
+  {name:'청년저축계좌',note:'청년내일저축계좌로 통합됨'}
+];
 /* 모집 시기 상태를 "오늘" 기준으로 실시간 계산한다 — 이전엔 사람이 손으로 true/false를
    박아넣었는데, 그러면 시간이 지나면 무조건 틀린 정보가 된다. 대신 실제 모집기간
    배열(windows)을 넣어두고, 오늘 날짜와 비교해서 모집중/모집예정/마감을 매번 새로 계산한다.
@@ -2932,6 +2942,9 @@ function renderSavProductReco(){
     html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 6px">나이/가구 조건에 안 맞는 상품</div>`+
       ineligible.map(p=>`<div class="cat-row" style="opacity:.5"><div class="cr-emo" style="cursor:default">🔒</div><div class="cr-body"><div style="font-size:13px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">만 ${p.ageMin}~${p.ageMax}세만 신청 가능 · ${esc(savProductStatus(p).label)}</div></div></div>`).join('');
   }
+  html+=`<div style="font-size:11px;color:var(--t3);margin:16px 4px 6px">신규가입 종료된 과거 사업 (참고용, 신청 불가)</div>`+
+    GOV_SAVINGS_CLOSED.map(p=>`<div class="cat-row" style="opacity:.4"><div class="cr-emo" style="cursor:default">🗄️</div><div class="cr-body"><div style="font-size:12.5px;font-weight:700">${esc(p.name)}</div><div class="cr-spent">${esc(p.note)}</div></div></div>`).join('');
+  html+=`<div style="font-size:11px;color:var(--t3);margin:12px 4px 0;line-height:1.5">ℹ️ &ldquo;청년재직자 내일채움공제(플러스)&rdquo;도 정부지원 자산형성 제도이지만, 개인이 직접 신청하는 게 아니라 특정 중소기업 취업 시 회사를 통해 가입하는 구조라 이 목록에서는 뺐어요.</div>`;
   el.innerHTML=html;
 }
 /* 이번 기간 지출 중 예산 대비 가장 많이 초과했거나(예산 미설정이면 가장 많이 쓴) 카테고리를
