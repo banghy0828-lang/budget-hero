@@ -874,12 +874,27 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
         <div style="flex:1"><div class="f-lbl2" id="bp-amount-lbl">예치금액</div><input id="bp-amount" type="number" inputmode="numeric" placeholder="예: 10000000" oninput="renderBankProdFinder()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
         <div style="flex:1"><div class="f-lbl2">기간</div>
           <select id="bp-term" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
-            <option value="6">6개월</option><option value="12" selected>12개월</option><option value="24">24개월</option><option value="36">36개월</option>
+            <option value="1">1개월</option><option value="3">3개월</option><option value="6">6개월</option><option value="12" selected>12개월</option><option value="24">24개월</option><option value="36">36개월</option>
           </select>
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1"><div class="f-lbl2">금융권</div>
+          <select id="bp-sector" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
+            <option value="all">전체</option><option value="은행">은행만</option><option value="저축은행">저축은행만</option>
+          </select>
+        </div>
+        <div style="flex:1"><div class="f-lbl2">정렬</div>
+          <select id="bp-sort" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
+            <option value="rate">금리 높은 순</option><option value="bank">은행명순</option>
+          </select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none;margin-bottom:8px">
         <input type="checkbox" id="bp-nonbranch" onchange="renderBankProdFinder()" style="width:16px;height:16px"> 비대면(인터넷·앱) 가입 가능한 상품만
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none">
+        <input type="checkbox" id="bp-groupbank" onchange="renderBankProdFinder()" style="width:16px;height:16px"> 은행별로 묶어서 보기(같은 은행 상품 접어두기)
       </label>
       <div style="font-size:11px;color:var(--t3);line-height:1.5;margin-top:10px">금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 데이터를 매일 자동으로 가져와요. 이자소득세 15.4% 뗀 세후 실수령액 기준이에요.</div>
     </div>
@@ -1906,9 +1921,13 @@ async function renderBankProdFinder(){
   setBpAmount(type,amount);
   const term=document.getElementById('bp-term').value;
   const nonBranchOnly=document.getElementById('bp-nonbranch').checked;
+  const sectorFilter=document.getElementById('bp-sector').value;
+  const sortMode=document.getElementById('bp-sort').value;
+  const groupByBank=document.getElementById('bp-groupbank').checked;
   const calc=type==='deposit'?calcDepositMaturity:calcSavingMaturity;
   let rows=[];
   data.products.forEach(p=>{
+    if(sectorFilter!=='all'&&p.sector!==sectorFilter)return;
     if(nonBranchOnly&&!/인터넷|스마트폰/.test(p.joinWay||''))return;
     const opts=(p.options||[]).filter(o=>o.term===term);
     if(!opts.length)return;
@@ -1921,7 +1940,7 @@ async function renderBankProdFinder(){
     const calcAmount=capped?p.maxLimit:amount;
     const calcRes=calcAmount>0?calc(calcAmount,opt.rate,parseInt(term),opt.rateType):null;
     const id=bankProdWatchId(type,p.bank,p.name,term);
-    rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,etcNote:p.etcNote,maxLimit:p.maxLimit,
+    rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,joinMember:p.joinMember,spclCnd:p.spclCnd,etcNote:p.etcNote,maxLimit:p.maxLimit,
       term:parseInt(term),rate:opt.rate,rateMax:opt.rateMax,rateType:opt.rateType,rsrvType:opt.rsrvType,
       calc:calcRes,capped});
   });
@@ -1931,38 +1950,56 @@ async function renderBankProdFinder(){
     renderBankProdCompare();
     return;
   }
-  rows.sort((a,b)=>b.rate-a.rate);
+  rows.sort((a,b)=>sortMode==='bank'?a.bank.localeCompare(b.bank,'ko'):b.rate-a.rate);
   BP_LAST_ROWS={};
-  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
-  const top=rows.slice(0,20);
-  el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">기본금리 순 · ${rows.length}개 중 상위 ${top.length}개</div>`+
-    top.map(r=>{
-      const watched=BankProdWatchRepo.isWatched(r.id);
-      const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
-        :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
-      const cappedLine=r.capped?`<div style="font-size:11px;color:var(--purple);margin-top:6px">⚠️ 가입한도 ${fmt(r.maxLimit)}까지만 이 금리가 적용돼요 — 위 금액은 한도 기준으로 계산했어요</div>`:'';
-      return`
-      <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
-          <span style="font-size:14.5px;font-weight:800">${esc(r.bank)}</span>
-          <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--card2);border-radius:20px;padding:3px 9px">${esc(r.sector)}</span>
-        </div>
-        <div style="font-size:13px;color:var(--t2);margin-bottom:8px">${esc(r.name)}${r.rsrvType?` · ${esc(r.rsrvType)}`:''}</div>
-        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
-          <span style="font-size:20px;font-weight:800;color:var(--purple)">${r.rate}%</span>
-          ${r.rateMax>r.rate?`<span style="font-size:12px;color:var(--t3)">(최고 ${r.rateMax}% 우대시)</span>`:''}
-          <span style="font-size:11px;color:var(--t3)">${esc(r.rateType)}</span>
-        </div>
-        ${netLine}
-        ${cappedLine}
-        <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}</div>
-        ${r.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.etcNote)}</div></details>`:''}
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button onclick="toggleBankProdWatch('${r.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
-        </div>
-      </div>`;
-    }).join('');
+  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,joinMember:r.joinMember,spclCnd:r.spclCnd,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
+  if(groupByBank){
+    const groups={};
+    rows.forEach(r=>{(groups[r.bank]=groups[r.bank]||[]).push(r);});
+    let bankList=Object.keys(groups).map(bank=>{
+      const items=groups[bank].slice().sort((a,b)=>b.rate-a.rate);
+      return{bank,items};
+    });
+    bankList.sort((a,b)=>sortMode==='bank'?a.bank.localeCompare(b.bank,'ko'):b.items[0].rate-a.items[0].rate);
+    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">은행별로 묶어보기 · 상품 ${rows.length}개 · 은행 ${bankList.length}곳</div>`+
+      bankList.map(g=>{
+        const rest=g.items.slice(1);
+        return bankProdCardHtml(g.items[0],type)+
+          (rest.length?`<details style="margin:-4px 0 10px 2px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer;padding:4px 2px">${esc(g.bank)} 상품 더보기 (${rest.length}개)</summary>${rest.map(r=>bankProdCardHtml(r,type)).join('')}</details>`:'');
+      }).join('');
+  }else{
+    const top=rows.slice(0,20);
+    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">${sortMode==='bank'?'은행명순':'기본금리 순'} · ${rows.length}개 중 상위 ${top.length}개</div>`+
+      top.map(r=>bankProdCardHtml(r,type)).join('');
+  }
   renderBankProdCompare();
+}
+function bankProdCardHtml(r,type){
+  const watched=BankProdWatchRepo.isWatched(r.id);
+  const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
+    :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
+  const cappedLine=r.capped?`<div style="font-size:11px;color:var(--purple);margin-top:6px">⚠️ 가입한도 ${fmt(r.maxLimit)}까지만 이 금리가 적용돼요 — 위 금액은 한도 기준으로 계산했어요</div>`:'';
+  return`
+  <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
+      <span style="font-size:14.5px;font-weight:800">${esc(r.bank)}</span>
+      <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--card2);border-radius:20px;padding:3px 9px">${esc(r.sector)}</span>
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:8px">${esc(r.name)}${r.rsrvType?` · ${esc(r.rsrvType)}`:''}</div>
+    <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+      <span style="font-size:20px;font-weight:800;color:var(--purple)">${r.rate}%</span>
+      ${r.rateMax>r.rate?`<span style="font-size:12px;color:var(--t3)">(최고 ${r.rateMax}% 우대시)</span>`:''}
+      <span style="font-size:11px;color:var(--t3)">${esc(r.rateType)}</span>
+    </div>
+    ${netLine}
+    ${cappedLine}
+    <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}${r.joinMember?` · 가입대상: ${esc(r.joinMember)}`:''}</div>
+    ${r.spclCnd&&r.spclCnd!=='해당사항 없음'?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--purple);cursor:pointer;font-weight:700">우대조건 상세 보기 (최고금리 받으려면)</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.spclCnd)}</div></details>`:''}
+    ${r.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.etcNote)}</div></details>`:''}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="toggleBankProdWatch('${r.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
+    </div>
+  </div>`;
 }
 /* 관심상품은 목록이 매일 갱신돼도 비교가 깨지지 않도록, id뿐 아니라 등록 당시 금리·조건
    스냅샷을 함께 저장해둔다. */
@@ -2022,6 +2059,8 @@ function renderBankProdCompare(){
       ${i._calc?`<div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(Math.round(i._calc.net))}</div>`:''}
       ${pros.map(p=>`<div style="font-size:11.5px;color:var(--green);margin-top:6px">${p}</div>`).join('')}
       ${cons.map(c=>`<div style="font-size:11.5px;color:var(--red);margin-top:4px">${c}</div>`).join('')}
+      ${i.joinMember?`<div style="font-size:11px;color:var(--t3);margin-top:8px">가입대상: ${esc(i.joinMember)}</div>`:''}
+      ${i.spclCnd&&i.spclCnd!=='해당사항 없음'?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--purple);cursor:pointer;font-weight:700">우대조건 상세 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(i.spclCnd)}</div></details>`:''}
       ${i.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(i.etcNote)}</div></details>`:''}
     </div>`;
   }).join('');
@@ -3109,8 +3148,10 @@ const GOV_SAVINGS_PRODUCTS=[
     result:'3년 유지 시 본인저축+정부지원 합쳐 1,000만원대 이상',
     income:'생계급여 또는 의료급여 수급 가구 중 근로활동 가구 (나이 제한 없음, 가구 소득·수급 기준)',
     other:'3년간 근로활동 유지 + 만기 시 소득이 일정 수준을 넘어야 지급(탈수급 목표)',
-    cycle:'연 4회 모집 (3월·6월·9월·11월)',
-    windows:[{start:'2026-03-03',end:'2026-03-13'},{start:'2026-06-01',end:'2026-06-15'},{start:'2026-09-01',end:'2026-09-14'},{start:'2026-11-02',end:'2026-11-16'}],
+    cycle:'연 4회 모집 (3월·6월·9월·11월, 단 1차에서 목표인원·예산이 소진되면 이후 회차가 지자체별로 조기 마감될 수 있음)',
+    windows:[{start:'2026-03-03',end:'2026-03-13'},{start:'2026-06-01',end:'2026-06-15',suspended:true},{start:'2026-09-01',end:'2026-09-14',suspended:true},{start:'2026-11-02',end:'2026-11-16'}],
+    earlyCloseRisk:true,
+    unknownNote:'⚠️ 2026년 2차(6월)·3차(9월) 모집은 1차에서 목표인원·예산이 조기 소진돼 다수 지자체에서 잠정 중단된 것으로 확인돼요(2026-09-03 자체 확인). 지역별로 상황이 다를 수 있어, 위 상태 표시와 무관하게 반드시 거주지 관할 읍면동 주민센터 또는 자산형성포털(hope.welfareinfo.or.kr)에서 우리 지역 모집 여부를 최종 확인하고 신청하세요.',
     link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
   },
   {
@@ -3123,6 +3164,8 @@ const GOV_SAVINGS_PRODUCTS=[
     other:'자립역량교육 10시간 이수 + 자금사용계획서 제출이 만기조건',
     cycle:'희망저축계좌Ⅰ과 비슷한 시기에 모집 (정확한 회차는 자산형성포털에서 확인 필요)',
     nextWindowUnknown:true,
+    earlyCloseRisk:true,
+    unknownNote:'⚠️ 같은 자산형성포털 예산으로 운영되는 희망저축계좌Ⅰ이 2026년 2·3차에서 목표인원 조기소진으로 잠정 중단된 사례가 확인돼(2026-09-03 기준) 이 상품도 같은 위험이 있을 수 있어요. 신청 전 자산형성포털(hope.welfareinfo.or.kr) 또는 관할 주민센터에서 모집 여부를 꼭 확인하세요.',
     link:'https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId=WLF00000060'
   }
 ];
@@ -3140,19 +3183,29 @@ const GOV_SAVINGS_CLOSED=[
    박아넣었는데, 그러면 시간이 지나면 무조건 틀린 정보가 된다. 대신 실제 모집기간
    배열(windows)을 넣어두고, 오늘 날짜와 비교해서 모집중/모집예정/마감을 매번 새로 계산한다.
    정확한 날짜를 못 구한 상품(nextWindowUnknown)만 예외적으로 문구 안내로 대체한다. */
+/* 정부 상품은 "날짜 범위 안에 있으면 모집중"이라는 단순 로직만으로는 실제 상태를 못 맞힐 때가 있다
+   — 특히 희망저축계좌류처럼 지자체별 예산·목표인원이 소진되면 공고된 기간이 남아있어도 특정 회차가
+   조기 마감되는 경우가 실제로 있다(2026-09-03 자체 검색 확인). 이런 위험이 있는 상품은
+   earlyCloseRisk 플래그로 표시해서 "모집중"이라고 확정하지 않고 조건부 문구로 낮춰 보여주고,
+   특정 회차가 이미 마감됐다고 확인된 경우엔 windows[].suspended:true 로 박아넣어 아예 마감으로 표시한다. */
 function savProductStatus(p){
   if(!p.windows||!p.windows.length){
     return p.nextWindowUnknown?{label:'모집 시기 별도 확인 필요',cls:'unknown',daysUntil:null}:{label:`마감 · 다음 ${p.nextWindow}`,cls:'closed',daysUntil:null};
   }
   const todayStr=today_();
   for(const w of p.windows){
-    if(todayStr>=w.start&&todayStr<=w.end)return{label:`🟢 모집중 (~${w.end.slice(5).replace('-','.')})`,cls:'open',daysUntil:0,window:w};
+    if(todayStr>=w.start&&todayStr<=w.end){
+      if(w.suspended)return{label:`⏸️ 조기 마감 확인됨 (원래 예정 ~${w.end.slice(5).replace('-','.')})`,cls:'closed',daysUntil:null,window:w,suspended:true};
+      if(p.earlyCloseRisk)return{label:`🟡 모집시기(~${w.end.slice(5).replace('-','.')}) · 조기마감 가능성 있음`,cls:'caution',daysUntil:0,window:w};
+      return{label:`🟢 모집중 (~${w.end.slice(5).replace('-','.')})`,cls:'open',daysUntil:0,window:w};
+    }
   }
   const future=p.windows.filter(w=>w.start>todayStr).sort((a,b)=>a.start<b.start?-1:1);
   if(future.length){
     const next=future[0];
     const days=Math.round((new Date(next.start)-new Date(todayStr))/86400000);
-    return{label:`모집예정 · D-${days} (${next.start.slice(5).replace('-','.')}~)`,cls:'upcoming',daysUntil:days,window:next};
+    const riskSuffix=p.earlyCloseRisk?' · 조기마감 이력 있음':'';
+    return{label:`모집예정 · D-${days} (${next.start.slice(5).replace('-','.')}~)${riskSuffix}`,cls:'upcoming',daysUntil:days,window:next};
   }
   return{label:'마감 · 다음 일정 미정',cls:'closed',daysUntil:null};
 }
@@ -3160,7 +3213,7 @@ function savProductStatus(p){
    화면에 항상 같이 보여준다. 3개월(분기)마다 한 번씩 다시 검색해서 이 날짜를 갱신하는 걸
    권장 주기로 삼는다 — 청년미래적금류는 보통 연 1~2회 신청기간이 발표되고,
    청년내일저축계좌류는 회계연도가 바뀌는 1~2월에 조건이 갱신되는 경우가 많기 때문. */
-const GOV_SAVINGS_LAST_VERIFIED='2026-08-30';
+const GOV_SAVINGS_LAST_VERIFIED='2026-09-03';
 function nextVerifyDate(fromStr){
   const d=new Date(fromStr);d.setMonth(d.getMonth()+3);
   return`${d.getFullYear()}년 ${d.getMonth()+1}월`;
@@ -3210,10 +3263,16 @@ function renderSavProductReco(){
   if(eligible.length){
     html+=eligible.map(p=>{
       const st=savProductStatus(p);
-      const stColors={open:['var(--green)','rgba(46,139,87,.12)'],upcoming:['var(--purple)','rgba(212,148,31,.12)'],closed:['var(--t3)','var(--card3)'],unknown:['var(--t3)','var(--card3)']};
+      const stColors={open:['var(--green)','rgba(46,139,87,.12)'],caution:['var(--red)','rgba(199,64,50,.12)'],upcoming:['var(--purple)','rgba(212,148,31,.12)'],closed:['var(--t3)','var(--card3)'],unknown:['var(--t3)','var(--card3)']};
       const[stColor,stBg]=stColors[st.cls]||stColors.closed;
       const ageRow=(p.ageMin===0&&p.ageMax>=100)?'가구 소득·수급 기준 (연령 제한 없음)':`만 ${p.ageMin}~${p.ageMax}세`;
       const watched=GovSavWatchRepo.isWatched(p.id);
+      /* 소득·기타 조건을 " + "로 이어붙여 써온 문장은 사실 여러 개의 독립 조건인데,
+         한 줄 문단으로 뭉쳐놓으면 "내가 이 중 뭘 충족해야 하는지" 스캔하기 어렵다.
+         조건마다 줄을 나눠 체크리스트처럼 보여주면 자격 판단이 훨씬 쉬워진다. */
+      const splitConds=t=>t?t.split(' + ').map(s=>s.trim()).filter(Boolean):[];
+      const incomeConds=splitConds(p.income);
+      const otherConds=splitConds(p.other);
       return`
       <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:12px">
@@ -3221,13 +3280,14 @@ function renderSavProductReco(){
           <span style="font-size:10.5px;font-weight:700;color:${stColor};background:${stBg};border-radius:20px;padding:3px 10px;white-space:nowrap">${esc(st.label)}</span>
         </div>
         ${p.unknownNote?`<div style="font-size:11px;color:var(--t3);background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:10px;line-height:1.5">${esc(p.unknownNote)}</div>`:''}
-        <div style="display:grid;grid-template-columns:64px 1fr;gap:6px 10px;font-size:12.5px">
-          <div style="color:var(--t3);font-weight:700">대상</div><div>${ageRow}</div>
+        <div style="display:grid;grid-template-columns:64px 1fr;gap:8px 10px;font-size:12.5px">
+          <div style="color:var(--t3);font-weight:700">나이</div><div>${ageRow}</div>
           <div style="color:var(--t3);font-weight:700">지원내용</div><div>${esc(p.benefit)}${p.result?`<br><span style="color:var(--purple);font-weight:700">${esc(p.result)}</span>`:''}</div>
-          <div style="color:var(--t3);font-weight:700">소득조건</div><div>${esc(p.income)}</div>
-          ${p.other?`<div style="color:var(--t3);font-weight:700">기타</div><div>${esc(p.other)}</div>`:''}
+          <div style="color:var(--t3);font-weight:700">소득조건</div><div>${incomeConds.map(c=>`☑︎ ${esc(c)}`).join('<br>')}</div>
+          ${otherConds.length?`<div style="color:var(--t3);font-weight:700">추가조건</div><div>${otherConds.map(c=>`☑︎ ${esc(c)}`).join('<br>')}</div>`:''}
           <div style="color:var(--t3);font-weight:700">모집주기</div><div>${esc(p.cycle)}</div>
         </div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:10px;line-height:1.5">위 조건을 모두 충족해야 신청 가능해요. 소득·재산 산정 방식이 세대·상황마다 달라서 최종 자격은 공식 안내 또는 주민센터 상담으로 확인하는 걸 권장해요.</div>
         <div style="display:flex;gap:8px;margin-top:12px">
           <button onclick="toggleGovSavWatch('${p.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
           <a href="${p.link}" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:10px;background:var(--bg2);border-radius:var(--r-sm);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">공식 안내 ↗</a>
