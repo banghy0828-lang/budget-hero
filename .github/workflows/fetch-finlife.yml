@@ -1,0 +1,32 @@
+name: Fetch finlife product rates
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # 매일 06:00 KST (UTC 21:00 전날)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch finlife data
+        run: node scripts/fetch-finlife.js
+        env:
+          FINLIFE_AUTH_KEY: ${{ secrets.FINLIFE_AUTH_KEY }}
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/deposit.json data/saving.json
+          git diff --cached --quiet || git commit -m "chore: update finlife product data"
+          git push
