@@ -1883,10 +1883,17 @@ function setBankProdType(type){
   renderBankProdFinder();
 }
 async function renderBankProdFinder(){
+  /* BP_TYPE을 지역변수 type에 즉시 붙잡아두고 이후로는 이것만 쓴다 — fetch를 기다리는 동안
+     사용자가 예금⇄적금을 다시 누르면 BP_TYPE(전역)이 바뀌어버리는데, await 이후에 전역을
+     다시 읽으면 다른 탭 데이터가 이 탭 계산식으로 섞여 들어가는 경쟁 상태 버그가 생긴다.
+     await 이후 type이 더 이상 BP_TYPE과 같지 않으면(그새 더 최신 호출이 시작됐으면) 이 호출은
+     조용히 포기해서, 항상 "가장 마지막에 누른 탭"의 렌더링만 화면에 반영되게 한다. */
+  const type=BP_TYPE;
   const el=document.getElementById('bankprod-list');if(!el)return;
   const freshEl=document.getElementById('bankprod-freshness');
   el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">⏳</div><div class="empty-t">상품 불러오는 중...</div></div>`;
-  const data=await loadBankProdData(BP_TYPE);
+  const data=await loadBankProdData(type);
+  if(type!==BP_TYPE)return;
   if(!data||!data.products){
     el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">📡</div><div class="empty-t">상품 정보를 불러오지 못했어요</div><div class="empty-s">인터넷 연결을 확인해주세요</div></div>`;
     return;
@@ -1896,10 +1903,10 @@ async function renderBankProdFinder(){
     freshEl.textContent=`ℹ️ 마지막 갱신: ${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} · 총 ${data.count}개 상품 (금융감독원 공식 데이터, 매일 자동 갱신)`;
   }
   const amount=parseInt(document.getElementById('bp-amount').value)||0;
-  setBpAmount(BP_TYPE,amount);
+  setBpAmount(type,amount);
   const term=document.getElementById('bp-term').value;
   const nonBranchOnly=document.getElementById('bp-nonbranch').checked;
-  const calc=BP_TYPE==='deposit'?calcDepositMaturity:calcSavingMaturity;
+  const calc=type==='deposit'?calcDepositMaturity:calcSavingMaturity;
   let rows=[];
   data.products.forEach(p=>{
     if(nonBranchOnly&&!/인터넷|스마트폰/.test(p.joinWay||''))return;
@@ -1907,11 +1914,12 @@ async function renderBankProdFinder(){
     if(!opts.length)return;
     const opt=opts.find(o=>o.rsrvType!=='자유적립식')||opts[0];
     const calcRes=amount>0?calc(amount,opt.rate,parseInt(term),opt.rateType):null;
-    const id=bankProdWatchId(BP_TYPE,p.bank,p.name,term);
+    const id=bankProdWatchId(type,p.bank,p.name,term);
     rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,
       term:parseInt(term),rate:opt.rate,rateMax:opt.rateMax,rateType:opt.rateType,rsrvType:opt.rsrvType,
       calc:calcRes});
   });
+  if(type!==BP_TYPE)return;
   if(!rows.length){
     el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">🔍</div><div class="empty-t">조건에 맞는 상품이 없어요</div><div class="empty-s">기간을 바꾸거나 필터를 해제해보세요</div></div>`;
     renderBankProdCompare();
@@ -1919,13 +1927,13 @@ async function renderBankProdFinder(){
   }
   rows.sort((a,b)=>b.rate-a.rate);
   BP_LAST_ROWS={};
-  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:BP_TYPE,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
+  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
   const top=rows.slice(0,20);
   el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">기본금리 순 · ${rows.length}개 중 상위 ${top.length}개</div>`+
     top.map(r=>{
       const watched=BankProdWatchRepo.isWatched(r.id);
       const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
-        :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${BP_TYPE==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
+        :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
       return`
       <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
