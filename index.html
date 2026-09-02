@@ -1837,6 +1837,12 @@ async function loadBankProdData(type){
   }
 }
 function simpleHash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;return(h>>>0).toString(36);}
+/* 예금(예치금액)과 적금(월 납입액)은 성격이 다른 숫자라 입력칸을 공유하면 헷갈린다
+   (예: 적금용 30만원을 입력한 채로 예금 탭·비교화면을 보면 30만원짜리 예금으로 계산됨).
+   타입별로 따로 저장해뒀다가 탭을 바꾸거나 비교화면을 그릴 때 각자의 값을 쓴다. */
+function bpAmountKey(type){return`bh2_bp_amount_${type}`;}
+function getBpAmount(type){try{return parseInt(localStorage.getItem(bpAmountKey(type)))||0;}catch(e){return 0;}}
+function setBpAmount(type,val){try{localStorage.setItem(bpAmountKey(type),String(val||0));}catch(e){}}
 function bankProdWatchId(type,bank,name,term){return simpleHash(`${type}|${bank}|${name}|${term}`);}
 /* 예금: 목돈을 한 번에 넣고 만기까지 유지. 단리=원금×연이율×(개월/12), 복리=매월 복리 계산.
    이자소득세 15.4%를 뗀 세후 실수령액까지 계산해서 보여준다. */
@@ -1865,6 +1871,8 @@ function setBankProdType(type){
   BP_TYPE=type;
   const amtLbl=document.getElementById('bp-amount-lbl');
   if(amtLbl)amtLbl.textContent=type==='deposit'?'예치금액':'월 납입액';
+  const amtInput=document.getElementById('bp-amount');
+  if(amtInput){const saved=getBpAmount(type);amtInput.value=saved>0?saved:'';}
   const dBtn=document.getElementById('bp-type-deposit'),sBtn=document.getElementById('bp-type-saving');
   if(dBtn&&sBtn){
     dBtn.style.background=type==='deposit'?'var(--purple)':'var(--bg2)';
@@ -1888,6 +1896,7 @@ async function renderBankProdFinder(){
     freshEl.textContent=`ℹ️ 마지막 갱신: ${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} · 총 ${data.count}개 상품 (금융감독원 공식 데이터, 매일 자동 갱신)`;
   }
   const amount=parseInt(document.getElementById('bp-amount').value)||0;
+  setBpAmount(BP_TYPE,amount);
   const term=document.getElementById('bp-term').value;
   const nonBranchOnly=document.getElementById('bp-nonbranch').checked;
   const calc=BP_TYPE==='deposit'?calcDepositMaturity:calcSavingMaturity;
@@ -1963,10 +1972,10 @@ function renderBankProdCompare(){
   const wrap=document.getElementById('bankprod-compare-wrap');if(!wrap)return;
   const watch=BankProdWatchRepo.all();
   if(!watch.length){wrap.innerHTML='';return;}
-  const amount=parseInt(document.getElementById('bp-amount').value)||0;
   const items=watch.map(w=>{
+    const amt=getBpAmount(w.type);
     const fn=w.type==='deposit'?calcDepositMaturity:calcSavingMaturity;
-    return{...w,_calc:amount>0?fn(amount,w.rate,w.term,w.rateType):null};
+    return{...w,_amt:amt,_calc:amt>0?fn(amt,w.rate,w.term,w.rateType):null};
   });
   const withCalc=items.filter(i=>i._calc);
   const maxNet=withCalc.length?Math.max(...withCalc.map(i=>i._calc.net)):null;
@@ -1981,20 +1990,21 @@ function renderBankProdCompare(){
     else cons.push('🏢 영업점 방문 가입만 가능');
     if(i.rateMax>i.rate)cons.push(`⚠️ 최고 ${i.rateMax}%는 우대조건 충족 시만 적용 (미충족 시 ${i.rate}%)`);
     if(i.sector==='저축은행')pros.push('🏦 저축은행 — 통상 시중은행보다 금리가 높음');
-    if(amount>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
+    if(i.type==='deposit'&&i._amt>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
     return`
     <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
         <span style="font-size:14px;font-weight:800">${esc(i.bank)} · ${esc(i.name)}</span>
         <button onclick="toggleBankProdWatch('${i.id}')" style="background:none;border:none;color:var(--t3);font-size:17px;cursor:pointer;line-height:1;padding:2px 4px">✕</button>
       </div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${i.term}개월 · 기본 ${i.rate}%${i.rateMax>i.rate?` (최고 ${i.rateMax}%)`:''} · ${esc(i.rateType)}</div>
-      ${i._calc?`<div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(Math.round(i._calc.net))}</div>`:`<div style="font-size:12px;color:var(--t3)">${i.type==='deposit'?'예치금액':'월 납입액'}을 입력하면 비교 금액이 나와요</div>`}
+      <div style="font-size:12px;color:var(--t3);margin-bottom:2px">${i.type==='deposit'?'예금':'적금'} · ${i.term}개월 · 기본 ${i.rate}%${i.rateMax>i.rate?` (최고 ${i.rateMax}%)`:''} · ${esc(i.rateType)}</div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:8px">${i._amt>0?`${i.type==='deposit'?'예치금액':'월 납입액'} ${fmt(i._amt)} 기준`:'저축·목표 페이지 상단에서 금액을 입력하면 비교 금액이 나와요'}</div>
+      ${i._calc?`<div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(Math.round(i._calc.net))}</div>`:''}
       ${pros.map(p=>`<div style="font-size:11.5px;color:var(--green);margin-top:6px">${p}</div>`).join('')}
       ${cons.map(c=>`<div style="font-size:11.5px;color:var(--red);margin-top:4px">${c}</div>`).join('')}
     </div>`;
   }).join('');
-  wrap.innerHTML=`<div style="font-size:11px;color:var(--t3);margin:16px 4px 8px">⭐ 관심상품 비교 (${items.length}개)</div>${cardsHtml}`;
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--t3);margin:16px 4px 8px">⭐ 관심상품 비교 (${items.length}개) · 예금·적금은 각자 입력한 금액 기준으로 계산돼요</div>${cardsHtml}`;
 }
 /* ═══════════════════════════ SHADOW BACKUP ═══════════════════════════
    로컬 저장 모드(클라우드 미연결)에서도 최소한의 안전망을 두기 위한 이중 저장.
