@@ -1913,11 +1913,17 @@ async function renderBankProdFinder(){
     const opts=(p.options||[]).filter(o=>o.term===term);
     if(!opts.length)return;
     const opt=opts.find(o=>o.rsrvType!=='자유적립식')||opts[0];
-    const calcRes=amount>0?calc(amount,opt.rate,parseInt(term),opt.rateType):null;
+    /* 일부 상품은 가입한도(maxLimit)가 있어서 그 이상 넣어도 초과분엔 이 금리가 안 붙는다.
+       구조화된 필드로 확인 가능한 한도는 계산에 반영하고, 한도 때문에 실제로 깎였으면 표시해준다.
+       (월 납입한도처럼 안내문(etcNote)에만 적혀있는 경우는 자동 파싱이 부정확할 위험이 있어
+       숫자 계산엔 안 쓰고, 대신 카드에 안내문 원문을 그대로 보여줘서 사용자가 직접 확인하게 한다.) */
+    const capped=p.maxLimit&&amount>p.maxLimit;
+    const calcAmount=capped?p.maxLimit:amount;
+    const calcRes=calcAmount>0?calc(calcAmount,opt.rate,parseInt(term),opt.rateType):null;
     const id=bankProdWatchId(type,p.bank,p.name,term);
-    rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,
+    rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,etcNote:p.etcNote,maxLimit:p.maxLimit,
       term:parseInt(term),rate:opt.rate,rateMax:opt.rateMax,rateType:opt.rateType,rsrvType:opt.rsrvType,
-      calc:calcRes});
+      calc:calcRes,capped});
   });
   if(type!==BP_TYPE)return;
   if(!rows.length){
@@ -1927,13 +1933,14 @@ async function renderBankProdFinder(){
   }
   rows.sort((a,b)=>b.rate-a.rate);
   BP_LAST_ROWS={};
-  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
+  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
   const top=rows.slice(0,20);
   el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">기본금리 순 · ${rows.length}개 중 상위 ${top.length}개</div>`+
     top.map(r=>{
       const watched=BankProdWatchRepo.isWatched(r.id);
       const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
         :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
+      const cappedLine=r.capped?`<div style="font-size:11px;color:var(--purple);margin-top:6px">⚠️ 가입한도 ${fmt(r.maxLimit)}까지만 이 금리가 적용돼요 — 위 금액은 한도 기준으로 계산했어요</div>`:'';
       return`
       <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
@@ -1947,7 +1954,9 @@ async function renderBankProdFinder(){
           <span style="font-size:11px;color:var(--t3)">${esc(r.rateType)}</span>
         </div>
         ${netLine}
+        ${cappedLine}
         <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}</div>
+        ${r.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.etcNote)}</div></details>`:''}
         <div style="display:flex;gap:8px;margin-top:12px">
           <button onclick="toggleBankProdWatch('${r.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
         </div>
@@ -1982,8 +1991,10 @@ function renderBankProdCompare(){
   if(!watch.length){wrap.innerHTML='';return;}
   const items=watch.map(w=>{
     const amt=getBpAmount(w.type);
+    const capped=w.maxLimit&&amt>w.maxLimit;
+    const calcAmt=capped?w.maxLimit:amt;
     const fn=w.type==='deposit'?calcDepositMaturity:calcSavingMaturity;
-    return{...w,_amt:amt,_calc:amt>0?fn(amt,w.rate,w.term,w.rateType):null};
+    return{...w,_amt:amt,_capped:capped,_calc:calcAmt>0?fn(calcAmt,w.rate,w.term,w.rateType):null};
   });
   const withCalc=items.filter(i=>i._calc);
   const maxNet=withCalc.length?Math.max(...withCalc.map(i=>i._calc.net)):null;
@@ -1999,6 +2010,7 @@ function renderBankProdCompare(){
     if(i.rateMax>i.rate)cons.push(`⚠️ 최고 ${i.rateMax}%는 우대조건 충족 시만 적용 (미충족 시 ${i.rate}%)`);
     if(i.sector==='저축은행')pros.push('🏦 저축은행 — 통상 시중은행보다 금리가 높음');
     if(i.type==='deposit'&&i._amt>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
+    if(i._capped)cons.push(`⚠️ 가입한도 ${fmt(i.maxLimit)}까지만 이 금리가 적용돼요 (그 이상은 별도 관리 필요)`);
     return`
     <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
@@ -2010,6 +2022,7 @@ function renderBankProdCompare(){
       ${i._calc?`<div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(Math.round(i._calc.net))}</div>`:''}
       ${pros.map(p=>`<div style="font-size:11.5px;color:var(--green);margin-top:6px">${p}</div>`).join('')}
       ${cons.map(c=>`<div style="font-size:11.5px;color:var(--red);margin-top:4px">${c}</div>`).join('')}
+      ${i.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(i.etcNote)}</div></details>`:''}
     </div>`;
   }).join('');
   wrap.innerHTML=`<div style="font-size:11px;color:var(--t3);margin:16px 4px 8px">⭐ 관심상품 비교 (${items.length}개) · 예금·적금은 각자 입력한 금액 기준으로 계산돼요</div>${cardsHtml}`;
