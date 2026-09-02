@@ -63,6 +63,7 @@ async function fetchAllPages(svc, topFinGrpNo) {
           rateType: o.intr_rate_type_nm, // 단리/복리
           rate: o.intr_rate, // 기본금리
           rateMax: o.intr_rate2, // 최고우대금리
+          rsrvType: o.rsrv_type_nm || null, // 정액적립식/자유적립식 (적금만 존재)
         }));
       items.push({
         bank: b.kor_co_nm,
