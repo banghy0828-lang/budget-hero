@@ -861,6 +861,32 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:6px">둘 다 금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 사이트 (링크 직접 확인 완료)</div>
     <a href="https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">📍 우리 지역 청년정책 찾기 (온통청년 공식, 지역 필터 가능) ↗</a>
   </div>
+
+  <!-- 은행 예금·적금 찾기 -->
+  <div class="sec" style="margin-bottom:0">
+    <div class="sec-hdr"><div class="sec-title">은행 예금·적금 찾기</div></div>
+    <div class="s-card" style="margin:0 0 10px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button id="bp-type-deposit" onclick="setBankProdType('deposit')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💰 예금(목돈 굴리기)</button>
+        <button id="bp-type-saving" onclick="setBankProdType('saving')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📅 적금(매달 납입)</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1"><div class="f-lbl2" id="bp-amount-lbl">예치금액</div><input id="bp-amount" type="number" inputmode="numeric" placeholder="예: 10000000" oninput="renderBankProdFinder()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
+        <div style="flex:1"><div class="f-lbl2">기간</div>
+          <select id="bp-term" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
+            <option value="6">6개월</option><option value="12" selected>12개월</option><option value="24">24개월</option><option value="36">36개월</option>
+          </select>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none">
+        <input type="checkbox" id="bp-nonbranch" onchange="renderBankProdFinder()" style="width:16px;height:16px"> 비대면(인터넷·앱) 가입 가능한 상품만
+      </label>
+      <div style="font-size:11px;color:var(--t3);line-height:1.5;margin-top:10px">금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 데이터를 매일 자동으로 가져와요. 이자소득세 15.4% 뗀 세후 실수령액 기준이에요.</div>
+    </div>
+    <div id="bankprod-freshness" style="font-size:11px;color:var(--t3);text-align:center;margin:2px 0 10px"></div>
+    <div id="bankprod-list"></div>
+    <div id="bankprod-compare-wrap"></div>
+  </div>
 </div>
 
 <!-- ═══ STATS ═══ -->
@@ -1783,6 +1809,192 @@ function checkGovSavReminders(){
     }
   });
   if(changed)GovSavWatchRepo.save(watch);
+}
+/* ═══════════════════════════ 은행 예금·적금 찾기 ═══════════════════════════
+   금융감독원 "금융상품 한눈에" 공식 API는 CORS를 지원하지 않아 브라우저에서 바로 못 부른다.
+   대신 GitHub Actions가 매일 서버에서 대신 호출해 data/deposit.json, data/saving.json 으로
+   저장해두고, 앱은 같은 출처(GitHub Pages)에서 그 정적 파일만 fetch한다 — 별도 서버·과금 없음.
+   금리는 dcls_month(공시월) 단위로 바뀌는 정보라 하루 한 번 갱신이면 충분하다. */
+let BP_TYPE='deposit';
+let BP_LAST_ROWS={};
+const BankProdCache={deposit:null,saving:null};
+async function loadBankProdData(type){
+  if(BankProdCache[type])return BankProdCache[type];
+  const ck=`bh2_bankprod_${type}`;
+  try{
+    const res=await fetch(`data/${type}.json`,{cache:'no-cache'});
+    if(!res.ok)throw new Error('fetch failed');
+    const json=await res.json();
+    BankProdCache[type]=json;
+    try{localStorage.setItem(ck,JSON.stringify(json))}catch(e){}
+    return json;
+  }catch(e){
+    try{
+      const cached=JSON.parse(localStorage.getItem(ck)||'null');
+      if(cached){BankProdCache[type]=cached;return cached;}
+    }catch(e2){}
+    return null;
+  }
+}
+function simpleHash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))|0;return(h>>>0).toString(36);}
+function bankProdWatchId(type,bank,name,term){return simpleHash(`${type}|${bank}|${name}|${term}`);}
+/* 예금: 목돈을 한 번에 넣고 만기까지 유지. 단리=원금×연이율×(개월/12), 복리=매월 복리 계산.
+   이자소득세 15.4%를 뗀 세후 실수령액까지 계산해서 보여준다. */
+function calcDepositMaturity(principal,ratePct,months,rateType){
+  const r=ratePct/100;
+  const gross=rateType==='복리'?principal*Math.pow(1+r/12,months):principal*(1+r*months/12);
+  const interest=gross-principal,tax=interest*0.154;
+  return{principal,interest,tax,gross,net:gross-tax};
+}
+/* 적금: 매달 같은 금액을 납입한다고 가정(자유적립식도 동일 금액 납입 시 근사치로 계산).
+   단리는 "각 회차 납입금이 만기까지 남은 개월수만큼만 이자가 붙는다"는 표준 적금 이자 공식 사용. */
+function calcSavingMaturity(monthly,ratePct,months,rateType){
+  const r=ratePct/100,principal=monthly*months;
+  let interest;
+  if(rateType==='복리'){
+    const rm=r/12;
+    const gross=rm===0?principal:monthly*((Math.pow(1+rm,months)-1)/rm)*(1+rm);
+    interest=gross-principal;
+  }else{
+    interest=monthly*r*(months*(months+1))/2/12;
+  }
+  const tax=interest*0.154;
+  return{principal,interest,tax,gross:principal+interest,net:principal+interest-tax};
+}
+function setBankProdType(type){
+  BP_TYPE=type;
+  const amtLbl=document.getElementById('bp-amount-lbl');
+  if(amtLbl)amtLbl.textContent=type==='deposit'?'예치금액':'월 납입액';
+  const dBtn=document.getElementById('bp-type-deposit'),sBtn=document.getElementById('bp-type-saving');
+  if(dBtn&&sBtn){
+    dBtn.style.background=type==='deposit'?'var(--purple)':'var(--bg2)';
+    dBtn.style.color=type==='deposit'?'var(--on-color)':'var(--t2)';
+    sBtn.style.background=type==='saving'?'var(--purple)':'var(--bg2)';
+    sBtn.style.color=type==='saving'?'var(--on-color)':'var(--t2)';
+  }
+  renderBankProdFinder();
+}
+async function renderBankProdFinder(){
+  const el=document.getElementById('bankprod-list');if(!el)return;
+  const freshEl=document.getElementById('bankprod-freshness');
+  el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">⏳</div><div class="empty-t">상품 불러오는 중...</div></div>`;
+  const data=await loadBankProdData(BP_TYPE);
+  if(!data||!data.products){
+    el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">📡</div><div class="empty-t">상품 정보를 불러오지 못했어요</div><div class="empty-s">인터넷 연결을 확인해주세요</div></div>`;
+    return;
+  }
+  if(freshEl){
+    const d=new Date(data.updatedAt);
+    freshEl.textContent=`ℹ️ 마지막 갱신: ${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} · 총 ${data.count}개 상품 (금융감독원 공식 데이터, 매일 자동 갱신)`;
+  }
+  const amount=parseInt(document.getElementById('bp-amount').value)||0;
+  const term=document.getElementById('bp-term').value;
+  const nonBranchOnly=document.getElementById('bp-nonbranch').checked;
+  const calc=BP_TYPE==='deposit'?calcDepositMaturity:calcSavingMaturity;
+  let rows=[];
+  data.products.forEach(p=>{
+    if(nonBranchOnly&&!/인터넷|스마트폰/.test(p.joinWay||''))return;
+    const opts=(p.options||[]).filter(o=>o.term===term);
+    if(!opts.length)return;
+    const opt=opts.find(o=>o.rsrvType!=='자유적립식')||opts[0];
+    const calcRes=amount>0?calc(amount,opt.rate,parseInt(term),opt.rateType):null;
+    const id=bankProdWatchId(BP_TYPE,p.bank,p.name,term);
+    rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,
+      term:parseInt(term),rate:opt.rate,rateMax:opt.rateMax,rateType:opt.rateType,rsrvType:opt.rsrvType,
+      calc:calcRes});
+  });
+  if(!rows.length){
+    el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">🔍</div><div class="empty-t">조건에 맞는 상품이 없어요</div><div class="empty-s">기간을 바꾸거나 필터를 해제해보세요</div></div>`;
+    renderBankProdCompare();
+    return;
+  }
+  rows.sort((a,b)=>b.rate-a.rate);
+  BP_LAST_ROWS={};
+  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:BP_TYPE,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
+  const top=rows.slice(0,20);
+  el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">기본금리 순 · ${rows.length}개 중 상위 ${top.length}개</div>`+
+    top.map(r=>{
+      const watched=BankProdWatchRepo.isWatched(r.id);
+      const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
+        :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${BP_TYPE==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
+      return`
+      <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
+          <span style="font-size:14.5px;font-weight:800">${esc(r.bank)}</span>
+          <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--card2);border-radius:20px;padding:3px 9px">${esc(r.sector)}</span>
+        </div>
+        <div style="font-size:13px;color:var(--t2);margin-bottom:8px">${esc(r.name)}${r.rsrvType?` · ${esc(r.rsrvType)}`:''}</div>
+        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+          <span style="font-size:20px;font-weight:800;color:var(--purple)">${r.rate}%</span>
+          ${r.rateMax>r.rate?`<span style="font-size:12px;color:var(--t3)">(최고 ${r.rateMax}% 우대시)</span>`:''}
+          <span style="font-size:11px;color:var(--t3)">${esc(r.rateType)}</span>
+        </div>
+        ${netLine}
+        <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}</div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button onclick="toggleBankProdWatch('${r.id}')" style="flex:1;padding:10px;background:${watched?'var(--purple)':'var(--bg2)'};color:${watched?'var(--on-color)':'var(--t2)'};border:none;border-radius:var(--r-sm);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">${watched?'★ 관심 등록됨':'☆ 관심상품 등록'}</button>
+        </div>
+      </div>`;
+    }).join('');
+  renderBankProdCompare();
+}
+/* 관심상품은 목록이 매일 갱신돼도 비교가 깨지지 않도록, id뿐 아니라 등록 당시 금리·조건
+   스냅샷을 함께 저장해둔다. */
+const BankProdWatchRepo={
+  _k:'bh2_bankprod_watch',
+  all(){try{return JSON.parse(localStorage.getItem(this._k)||'[]')}catch{return[]}},
+  save(a){localStorage.setItem(this._k,JSON.stringify(a));try{cloudSaveAll('bankProdWatch',a)}catch(e){}},
+  isWatched(id){return this.all().some(w=>w.id===id)},
+  toggle(id,snapshot){
+    let a=this.all();
+    if(a.some(w=>w.id===id))a=a.filter(w=>w.id!==id);
+    else if(snapshot)a.push({...snapshot,addedAt:new Date().toISOString()});
+    this.save(a);
+  }
+};
+function toggleBankProdWatch(id){
+  BankProdWatchRepo.toggle(id,BP_LAST_ROWS[id]);
+  showToast(BankProdWatchRepo.isWatched(id)?'★ 관심상품 등록':'관심상품 해제');
+  renderBankProdFinder();
+}
+/* 관심상품 2개 이상이면 나란히 비교 — 규칙 기반으로 장단점을 계산한다(광고성 문구 없이,
+   실수령액·금리·만기·가입방법·예금자보호 한도처럼 확인 가능한 사실만 근거로 삼는다). */
+function renderBankProdCompare(){
+  const wrap=document.getElementById('bankprod-compare-wrap');if(!wrap)return;
+  const watch=BankProdWatchRepo.all();
+  if(!watch.length){wrap.innerHTML='';return;}
+  const amount=parseInt(document.getElementById('bp-amount').value)||0;
+  const items=watch.map(w=>{
+    const fn=w.type==='deposit'?calcDepositMaturity:calcSavingMaturity;
+    return{...w,_calc:amount>0?fn(amount,w.rate,w.term,w.rateType):null};
+  });
+  const withCalc=items.filter(i=>i._calc);
+  const maxNet=withCalc.length?Math.max(...withCalc.map(i=>i._calc.net)):null;
+  const maxRate=Math.max(...items.map(i=>i.rate));
+  const minTerm=Math.min(...items.map(i=>i.term));
+  const cardsHtml=items.map(i=>{
+    const pros=[],cons=[];
+    if(i._calc&&maxNet!==null&&Math.abs(i._calc.net-maxNet)<1&&items.length>1)pros.push('💰 관심상품 중 예상 실수령액 최고');
+    if(i.rate===maxRate&&items.length>1)pros.push('📈 관심상품 중 기본금리 최고');
+    if(i.term===minTerm&&items.length>1)pros.push('⏱ 관심상품 중 만기가 가장 빠름');
+    if(/인터넷|스마트폰/.test(i.joinWay||''))pros.push('📱 비대면(인터넷·앱) 가입 가능');
+    else cons.push('🏢 영업점 방문 가입만 가능');
+    if(i.rateMax>i.rate)cons.push(`⚠️ 최고 ${i.rateMax}%는 우대조건 충족 시만 적용 (미충족 시 ${i.rate}%)`);
+    if(i.sector==='저축은행')pros.push('🏦 저축은행 — 통상 시중은행보다 금리가 높음');
+    if(amount>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
+    return`
+    <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
+        <span style="font-size:14px;font-weight:800">${esc(i.bank)} · ${esc(i.name)}</span>
+        <button onclick="toggleBankProdWatch('${i.id}')" style="background:none;border:none;color:var(--t3);font-size:17px;cursor:pointer;line-height:1;padding:2px 4px">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">${i.term}개월 · 기본 ${i.rate}%${i.rateMax>i.rate?` (최고 ${i.rateMax}%)`:''} · ${esc(i.rateType)}</div>
+      ${i._calc?`<div style="font-size:18px;font-weight:800;color:var(--green)">${fmt(Math.round(i._calc.net))}</div>`:`<div style="font-size:12px;color:var(--t3)">${i.type==='deposit'?'예치금액':'월 납입액'}을 입력하면 비교 금액이 나와요</div>`}
+      ${pros.map(p=>`<div style="font-size:11.5px;color:var(--green);margin-top:6px">${p}</div>`).join('')}
+      ${cons.map(c=>`<div style="font-size:11.5px;color:var(--red);margin-top:4px">${c}</div>`).join('')}
+    </div>`;
+  }).join('');
+  wrap.innerHTML=`<div style="font-size:11px;color:var(--t3);margin:16px 4px 8px">⭐ 관심상품 비교 (${items.length}개)</div>${cardsHtml}`;
 }
 /* ═══════════════════════════ SHADOW BACKUP ═══════════════════════════
    로컬 저장 모드(클라우드 미연결)에서도 최소한의 안전망을 두기 위한 이중 저장.
@@ -2771,15 +2983,17 @@ function renderGoalsPage(){
     gl.innerHTML=`<div class="empty"><div class="empty-e">🎯</div><div class="empty-t">목표가 없어요</div><div class="empty-s">우측 상단 ＋ 버튼으로 저축 목표를 추가해 보세요</div></div>`;
     document.getElementById('goal-reco').innerHTML='';
     renderSavProductReco();
+    setBankProdType(BP_TYPE);
     return;
   }
   gl.innerHTML=goals.map(g=>buildGoalCard(g)).join('');
   renderGoalRecommendation(goals);
   renderSavProductReco();
+  setBankProdType(BP_TYPE);
 }
 /* ═══════════════════════════ 저축상품 추천 (정부지원) ═══════════════════════════
-   금리·상품이 매일 바뀌는 은행 예·적금은 잘못된 숫자를 박아넣느니 공식 비교 사이트로
-   링크만 걸어둔다(위 HTML의 finlife.fss.or.kr 버튼). 대신 조건이 자주 안 바뀌는
+   은행 예·적금은 금융감독원 공식 API 데이터(위쪽 "은행 예금·적금 찾기")로 직접 조회·계산해서
+   보여준다. 여기서는 그렇게 API로 커버되지 않는, 조건이 자주 안 바뀌는
    전국 단위 정부지원 상품 2개는 나이 조건으로 바로 자격을 걸러서 보여준다.
    출처: 2026년 기준 각 상품 안내(하단 note에 명시). 정확한 소득 조건 등은 상품별로
    따로 있어서 이 화면만으로 최종 자격을 확정하지 않는다 — 반드시 공식 페이지 재확인 필요. */
