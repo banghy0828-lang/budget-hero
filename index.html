@@ -870,7 +870,12 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
         <button id="bp-type-deposit" onclick="setBankProdType('deposit')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💰 예금(목돈 굴리기)</button>
         <button id="bp-type-saving" onclick="setBankProdType('saving')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📅 적금(매달 납입)</button>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:10px">
+      <!-- 검색 조건: 어떤 상품을 후보로 넣을지 걸러내는 값들 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 8px">
+        <div style="font-size:11px;font-weight:800;color:var(--t3);letter-spacing:.02em">검색 조건</div>
+        <div onclick="resetBankProdFilters()" style="font-size:11px;color:var(--t3);text-decoration:underline;cursor:pointer">초기화</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1"><div class="f-lbl2" id="bp-amount-lbl">예치금액</div><input id="bp-amount" type="number" inputmode="numeric" placeholder="예: 10000000" oninput="renderBankProdFinder()" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit"></div>
         <div style="flex:1"><div class="f-lbl2">기간</div>
           <select id="bp-term" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
@@ -878,24 +883,31 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
           </select>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <div style="flex:1"><div class="f-lbl2">금융권</div>
           <select id="bp-sector" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
             <option value="all">전체</option><option value="은행">은행만</option><option value="저축은행">저축은행만</option>
           </select>
         </div>
-        <div style="flex:1"><div class="f-lbl2">정렬</div>
-          <select id="bp-sort" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
-            <option value="rate">금리 높은 순</option><option value="bank">은행명순</option>
-          </select>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div class="f-lbl2">가입방법</div>
+          <button id="bp-nonbranch-btn" onclick="toggleBpFlag('nonbranch')" style="flex:1;padding:0 8px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;background:var(--bg2);color:var(--t2)">📱 비대면만</button>
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none;margin-bottom:8px">
-        <input type="checkbox" id="bp-nonbranch" onchange="renderBankProdFinder()" style="width:16px;height:16px"> 비대면(인터넷·앱) 가입 가능한 상품만
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2);cursor:pointer;user-select:none">
-        <input type="checkbox" id="bp-groupbank" onchange="renderBankProdFinder()" style="width:16px;height:16px"> 은행별로 묶어서 보기(같은 은행 상품 접어두기)
-      </label>
+      <div style="height:1px;background:var(--line);margin:10px 0"></div>
+      <!-- 정렬 · 보기 방식: 후보는 그대로 두고 어떤 순서·모양으로 보여줄지만 바꾸는 값들 -->
+      <div style="font-size:11px;font-weight:800;color:var(--t3);letter-spacing:.02em;margin-bottom:8px">정렬 · 보기 방식</div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><div class="f-lbl2">정렬</div>
+          <select id="bp-sort" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
+            <option value="rate">기본금리순</option><option value="net">실수령액순</option><option value="bank">은행명순</option>
+          </select>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div class="f-lbl2">묶어보기</div>
+          <button id="bp-groupbank-btn" onclick="toggleBpFlag('groupbank')" style="flex:1;padding:0 8px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;background:var(--bg2);color:var(--t2)">🏦 은행별로</button>
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--t3);line-height:1.5;margin-top:10px">금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 데이터를 매일 자동으로 가져와요. 이자소득세 15.4% 뗀 세후 실수령액 기준이에요.</div>
     </div>
     <div id="bankprod-freshness" style="font-size:11px;color:var(--t3);text-align:center;margin:2px 0 10px"></div>
@@ -1832,6 +1844,29 @@ function checkGovSavReminders(){
    금리는 dcls_month(공시월) 단위로 바뀌는 정보라 하루 한 번 갱신이면 충분하다. */
 let BP_TYPE='deposit';
 let BP_LAST_ROWS={};
+/* 체크박스 대신 버튼형 토글로 바꾼 필터(비대면만/은행별로 묶기)의 켜짐 상태.
+   버튼은 셀렉트박스들과 같은 톤으로 맞춰서 "검색 조건 / 정렬" 두 구역이 시각적으로도
+   구분되게 하려는 것 — 예전엔 체크박스·셀렉트가 뒤섞여 있어서 뭐가 필터고 뭐가 정렬인지
+   한눈에 안 들어온다는 피드백을 반영했다. */
+const BP_FLAGS={nonbranch:false,groupbank:false};
+function toggleBpFlag(key){
+  BP_FLAGS[key]=!BP_FLAGS[key];
+  const btn=document.getElementById(`bp-${key}-btn`);
+  if(btn){
+    btn.style.background=BP_FLAGS[key]?'var(--purple)':'var(--bg2)';
+    btn.style.color=BP_FLAGS[key]?'var(--on-color)':'var(--t2)';
+    btn.style.borderColor=BP_FLAGS[key]?'var(--purple)':'var(--line)';
+  }
+  renderBankProdFinder();
+}
+function resetBankProdFilters(){
+  document.getElementById('bp-amount').value='';
+  document.getElementById('bp-term').value='12';
+  document.getElementById('bp-sector').value='all';
+  if(BP_FLAGS.nonbranch)toggleBpFlag('nonbranch');
+  setBpAmount(BP_TYPE,0);
+  renderBankProdFinder();
+}
 const BankProdCache={deposit:null,saving:null};
 async function loadBankProdData(type){
   if(BankProdCache[type])return BankProdCache[type];
@@ -1920,10 +1955,10 @@ async function renderBankProdFinder(){
   const amount=parseInt(document.getElementById('bp-amount').value)||0;
   setBpAmount(type,amount);
   const term=document.getElementById('bp-term').value;
-  const nonBranchOnly=document.getElementById('bp-nonbranch').checked;
+  const nonBranchOnly=BP_FLAGS.nonbranch;
   const sectorFilter=document.getElementById('bp-sector').value;
   const sortMode=document.getElementById('bp-sort').value;
-  const groupByBank=document.getElementById('bp-groupbank').checked;
+  const groupByBank=BP_FLAGS.groupbank;
   const calc=type==='deposit'?calcDepositMaturity:calcSavingMaturity;
   let rows=[];
   data.products.forEach(p=>{
@@ -1931,7 +1966,8 @@ async function renderBankProdFinder(){
     if(nonBranchOnly&&!/인터넷|스마트폰/.test(p.joinWay||''))return;
     const opts=(p.options||[]).filter(o=>o.term===term);
     if(!opts.length)return;
-    const opt=opts.find(o=>o.rsrvType!=='자유적립식')||opts[0];
+    const fixedOpt=opts.find(o=>o.rsrvType!=='자유적립식');
+    const opt=fixedOpt||opts[0];
     /* 일부 상품은 가입한도(maxLimit)가 있어서 그 이상 넣어도 초과분엔 이 금리가 안 붙는다.
        구조화된 필드로 확인 가능한 한도는 계산에 반영하고, 한도 때문에 실제로 깎였으면 표시해준다.
        (월 납입한도처럼 안내문(etcNote)에만 적혀있는 경우는 자동 파싱이 부정확할 위험이 있어
@@ -1940,9 +1976,13 @@ async function renderBankProdFinder(){
     const calcAmount=capped?p.maxLimit:amount;
     const calcRes=calcAmount>0?calc(calcAmount,opt.rate,parseInt(term),opt.rateType):null;
     const id=bankProdWatchId(type,p.bank,p.name,term);
+    /* 자유적립식은 매달 넣는 금액이 사람마다 다른데, 계산식은 "매달 똑같은 금액을 넣는다"고
+       가정한 근사치다. 정액적립식 옵션이 아예 없어서 이걸 쓸 수밖에 없었던 경우에만
+       사용자에게 이 사실을 알려준다(정액적립식이 있으면 그걸 우선 쓰므로 표시 안 함). */
+    const freeApprox=type==='saving'&&!fixedOpt&&opt.rsrvType==='자유적립식';
     rows.push({id,bank:p.bank,name:p.name,sector:p.sector,joinWay:p.joinWay,joinMember:p.joinMember,spclCnd:p.spclCnd,etcNote:p.etcNote,maxLimit:p.maxLimit,
       term:parseInt(term),rate:opt.rate,rateMax:opt.rateMax,rateType:opt.rateType,rsrvType:opt.rsrvType,
-      calc:calcRes,capped});
+      calc:calcRes,capped,freeApprox});
   });
   if(type!==BP_TYPE)return;
   if(!rows.length){
@@ -1950,26 +1990,34 @@ async function renderBankProdFinder(){
     renderBankProdCompare();
     return;
   }
-  rows.sort((a,b)=>sortMode==='bank'?a.bank.localeCompare(b.bank,'ko'):b.rate-a.rate);
+  const cmp=(a,b)=>{
+    if(sortMode==='bank')return a.bank.localeCompare(b.bank,'ko');
+    if(sortMode==='net')return(b.calc?b.calc.net:-1)-(a.calc?a.calc.net:-1);
+    return b.rate-a.rate;
+  };
+  rows.sort(cmp);
   BP_LAST_ROWS={};
-  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,joinMember:r.joinMember,spclCnd:r.spclCnd,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType};});
+  rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,joinMember:r.joinMember,spclCnd:r.spclCnd,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType,freeApprox:r.freeApprox};});
+  const sortLabel=sortMode==='bank'?'은행명순':sortMode==='net'?'실수령액순':'기본금리순';
   if(groupByBank){
     const groups={};
     rows.forEach(r=>{(groups[r.bank]=groups[r.bank]||[]).push(r);});
     let bankList=Object.keys(groups).map(bank=>{
-      const items=groups[bank].slice().sort((a,b)=>b.rate-a.rate);
+      const items=groups[bank].slice().sort(cmp);
       return{bank,items};
     });
-    bankList.sort((a,b)=>sortMode==='bank'?a.bank.localeCompare(b.bank,'ko'):b.items[0].rate-a.items[0].rate);
-    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">은행별로 묶어보기 · 상품 ${rows.length}개 · 은행 ${bankList.length}곳</div>`+
+    bankList.sort((a,b)=>sortMode==='bank'?a.bank.localeCompare(b.bank,'ko'):cmp(a.items[0],b.items[0]));
+    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">은행별로 묶어보기 · ${sortLabel} · 상품 ${rows.length}개 · 은행 ${bankList.length}곳</div>`+
       bankList.map(g=>{
         const rest=g.items.slice(1);
+        // 관심 등록해둔 상품이 "더보기" 안에 숨어있으면 자동으로 펼쳐서, 등록한 걸 놓치지 않게 한다
+        const hasWatchedInRest=rest.some(r=>BankProdWatchRepo.isWatched(r.id));
         return bankProdCardHtml(g.items[0],type)+
-          (rest.length?`<details style="margin:-4px 0 10px 2px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer;padding:4px 2px">${esc(g.bank)} 상품 더보기 (${rest.length}개)</summary>${rest.map(r=>bankProdCardHtml(r,type)).join('')}</details>`:'');
+          (rest.length?`<details${hasWatchedInRest?' open':''} style="margin:-4px 0 10px 2px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer;padding:4px 2px">${esc(g.bank)} 상품 더보기 (${rest.length}개)${hasWatchedInRest?' ★':''}</summary>${rest.map(r=>bankProdCardHtml(r,type)).join('')}</details>`:'');
       }).join('');
   }else{
     const top=rows.slice(0,20);
-    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">${sortMode==='bank'?'은행명순':'기본금리 순'} · ${rows.length}개 중 상위 ${top.length}개</div>`+
+    el.innerHTML=`<div style="font-size:11.5px;color:var(--t3);margin:0 4px 8px">${sortLabel} · ${rows.length}개 중 상위 ${top.length}개</div>`+
       top.map(r=>bankProdCardHtml(r,type)).join('');
   }
   renderBankProdCompare();
@@ -1979,6 +2027,7 @@ function bankProdCardHtml(r,type){
   const netLine=r.calc?`<div style="font-size:19px;font-weight:800;color:var(--green);margin-top:4px">${fmt(Math.round(r.calc.net))}</div><div style="font-size:11px;color:var(--t3)">세전 ${fmt(Math.round(r.calc.gross))} · 이자 ${fmt(Math.round(r.calc.interest))} · 세금 -${fmt(Math.round(r.calc.tax))}</div>`
     :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
   const cappedLine=r.capped?`<div style="font-size:11px;color:var(--purple);margin-top:6px">⚠️ 가입한도 ${fmt(r.maxLimit)}까지만 이 금리가 적용돼요 — 위 금액은 한도 기준으로 계산했어요</div>`:'';
+  const freeApproxLine=r.freeApprox?`<div style="font-size:11px;color:var(--t3);margin-top:6px">ℹ️ 자유적립식은 매달 넣는 금액이 자유라, 위 금액은 &ldquo;매달 똑같이 납입&rdquo;했다고 가정한 추정치예요</div>`:'';
   return`
   <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
@@ -1993,6 +2042,7 @@ function bankProdCardHtml(r,type){
     </div>
     ${netLine}
     ${cappedLine}
+    ${freeApproxLine}
     <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}${r.joinMember?` · 가입대상: ${esc(r.joinMember)}`:''}</div>
     ${r.spclCnd&&r.spclCnd!=='해당사항 없음'?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--purple);cursor:pointer;font-weight:700">우대조건 상세 보기 (최고금리 받으려면)</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.spclCnd)}</div></details>`:''}
     ${r.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.etcNote)}</div></details>`:''}
@@ -2048,6 +2098,7 @@ function renderBankProdCompare(){
     if(i.sector==='저축은행')pros.push('🏦 저축은행 — 통상 시중은행보다 금리가 높음');
     if(i.type==='deposit'&&i._amt>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
     if(i._capped)cons.push(`⚠️ 가입한도 ${fmt(i.maxLimit)}까지만 이 금리가 적용돼요 (그 이상은 별도 관리 필요)`);
+    if(i.freeApprox)cons.push('ℹ️ 자유적립식 — 매달 똑같이 납입했다고 가정한 추정치');
     return`
     <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
