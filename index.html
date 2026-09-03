@@ -4027,6 +4027,12 @@ const OCR_RELTIME_RE=/\d+\s*(초|분|시간|일|주|개월|년)\s*전|방금\s*�
    나오면 OCR이 다른 글자를 잘못 읽었을 가능성이 높다 — 이런 항목은 기본적으로 체크 해제해서
    사용자가 한 번 더 확인하고 넣게 한다. */
 const OCR_SUSPICIOUS_RE=/[£¥€§¶†‡]/;
+/* "결제"/"출금"처럼 거래 유형을 나타내는 단어일 뿐 상호명이 아닌 텍스트가, 금액과 같은 줄에
+   달랑 남아버리면(예: "114원 결제") 상호명으로 잘못 채택되던 문제를 막는다. */
+const OCR_GENERIC_WORD_RE=/^(결제|출금|입금|승인|이체|잔액|사용|취소|거래)$/;
+/* "9.3"처럼 월.일만 있는 헤더뿐 아니라 "2026.9.3"처럼 연도가 붙은 헤더도 있는데, 이건 기존
+   패턴(OCR_DATE_HDR_RE)에 안 걸려서 "2026"이 통째로 금액(2026원)으로 오인식되곤 했다. */
+const OCR_FULLDATE_HDR_RE=/^(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})(?:[.\-\/]|\s|$)/;
 function ocrInferYear(mm,dd){
   const now=new Date();
   let year=now.getFullYear();
@@ -4047,6 +4053,12 @@ function parseOcrText(text){
     if(SKIP_RE.test(line))continue;
     if(OCR_TIME_RE.test(line))continue; // 시각+결제수단+잔액 줄 — 거래 항목이 아니므로 건너뜀
     if(OCR_RELTIME_RE.test(line))continue; // "1시간 전" 같은 알림 상대시간 라벨 — 거래 항목이 아니므로 건너뜀
+    const fullHdr=line.match(OCR_FULLDATE_HDR_RE);
+    if(fullHdr&&line.replace(OCR_FULLDATE_HDR_RE,'').trim().length<6){
+      curDate=`${fullHdr[1]}-${String(fullHdr[2]).padStart(2,'0')}-${String(fullHdr[3]).padStart(2,'0')}`;
+      pendingMerchant=null;
+      continue;
+    }
     const hdr=line.match(OCR_DATE_HDR_RE);
     if(hdr&&line.replace(OCR_DATE_HDR_RE,'').trim().length<6){
       // 순수 날짜 구간 헤더(뒤에 요일 정도만 붙는 짧은 줄)로 판단 — 이후 항목의 날짜를 갱신하고 넘어감
@@ -4064,13 +4076,13 @@ function parseOcrText(text){
       const hasPlus=m[1]==='+';
       let merchant=textOnly;
       const digitRatio=(merchant.match(/\d/g)||[]).length/(merchant.length||1);
-      if((!merchant||merchant.length<2||digitRatio>0.5)&&pendingMerchant)merchant=pendingMerchant;
+      if((!merchant||merchant.length<2||digitRatio>0.5||OCR_GENERIC_WORD_RE.test(merchant))&&pendingMerchant)merchant=pendingMerchant;
       /* 상호명을 못 찾아서 "항목 N"으로 대체했거나, 원화 캡처본엔 나올 리 없는 통화기호가
          섞여있으면 OCR이 헛읽었을 가능성이 높다고 보고 lowConfidence로 표시한다.
          이런 항목은 기본 체크를 꺼둬서, 사용자가 실제로 확인하고 켜야만 저장되게 한다 —
          예전엔 전부 기본 체크(포함)였어서 이런 오인식 항목이 조용히 같이 저장되곤 했다. */
       let lowConfidence=false;
-      if(!merchant||merchant.length<2){merchant='항목 '+(items.length+1);lowConfidence=true;}
+      if(!merchant||merchant.length<2||OCR_GENERIC_WORD_RE.test(merchant)){merchant='항목 '+(items.length+1);lowConfidence=true;}
       else if(OCR_SUSPICIOUS_RE.test(merchant))lowConfidence=true;
       const isInc=hasPlus||(OCR_INC_RE.test(line)&&!OCR_EXP_RE.test(line));
       const type=isInc?'inc':'exp';
