@@ -4112,7 +4112,7 @@ function renderOcrItems(){
           ${catSelectOptions(cats,it.category)}
         </select>
       </div>
-      <input class="f-in" style="width:100%;padding:8px 12px;font-size:13px" type="date" value="${it.date||today_()}" onchange="updOcrItem(${i},'date',this.value)">
+      <input class="f-in" style="width:100%;max-width:100%;min-width:0;padding:8px 12px;font-size:13px" type="date" value="${it.date||today_()}" onchange="updOcrItem(${i},'date',this.value)">
     </div>`;
   }).join('');
   document.getElementById('eo-save').textContent=`전체 저장 (${_ocrItems.filter(x=>x.include).length}건)`;
