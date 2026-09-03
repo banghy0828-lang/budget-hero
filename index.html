@@ -723,6 +723,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     </div>
     <!-- Quick -->
     <div id="exp-quick-wrap" style="display:none">
+      <div id="eq-suggest" style="display:none;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px"></div>
       <input class="quick-big" id="eq-in" type="text" placeholder="예: 4500 스타벅스" maxlength="40" oninput="parseQuick(this.value)" onkeydown="if(event.key==='Enter')saveQuick()">
       <div class="quick-hint">금액 + 상호명 입력 → <span style="color:var(--purp2)">Enter</span>로 즉시 저장</div>
       <div class="qp-wrap" id="eq-parsed">
@@ -2799,7 +2800,45 @@ function setExpMode(m){
     document.getElementById('exp-'+x+'-wrap').style.display=x===m?'block':'none';
     document.getElementById('em-'+x).classList.toggle('active',x===m);
   });
-  if(m==='quick')setTimeout(()=>document.getElementById('eq-in').focus(),80);
+  if(m==='quick'){renderQuickSuggest();setTimeout(()=>document.getElementById('eq-in').focus(),80);}
+}
+/* 매번 같은 카페·편의점·점심값을 처음부터 타이핑하는 게 반복 입력의 진짜 피로도라,
+   2번 이상 반복된 상호명을 최근 사용 순으로 뽑아 칩으로 보여준다. 누르면 빠른입력 칸에
+   "금액 상호명" 형태로 채워 넣고 바로 parseQuick을 태워서, 기존 확인→저장 흐름은 그대로
+   유지하면서 타이핑만 없앤다(오탭으로 바로 저장돼버리는 사고를 막기 위해 즉시저장은 안 함). */
+let _quickSuggestList=[];
+function frequentExpenses(limit){
+  const all=ExpRepo.all();
+  const byMerchant={};
+  all.forEach(e=>{
+    const key=norm(e.merchant);if(!key)return;
+    if(!byMerchant[key])byMerchant[key]={merchant:e.merchant,count:0,lastAmount:e.amount,lastDate:e.date||'',category:e.category};
+    const b=byMerchant[key];
+    b.count++;
+    if((e.date||'')>=b.lastDate){b.lastAmount=e.amount;b.lastDate=e.date||'';b.category=e.category;}
+  });
+  return Object.values(byMerchant)
+    .filter(x=>x.count>=2)
+    .sort((a,b)=>b.count-a.count||(b.lastDate>a.lastDate?1:-1))
+    .slice(0,limit||6);
+}
+function renderQuickSuggest(){
+  const el=document.getElementById('eq-suggest');if(!el)return;
+  _quickSuggestList=frequentExpenses(6);
+  if(!_quickSuggestList.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  el.innerHTML=_quickSuggestList.map((f,i)=>{
+    const cat=CatRepo.get().find(c=>c.name===f.category);
+    return`<button type="button" onclick="fillQuickSuggest(${i})" style="flex-shrink:0;padding:9px 14px;border-radius:20px;border:1px solid var(--line);background:var(--card2);color:var(--t2);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${cat?.emoji||'📦'} ${esc(f.merchant)} · ${fmt(f.lastAmount)}</button>`;
+  }).join('');
+}
+function fillQuickSuggest(i){
+  const f=_quickSuggestList[i];if(!f)return;
+  const val=f.lastAmount+' '+f.merchant;
+  const input=document.getElementById('eq-in');
+  input.value=val;
+  parseQuick(val);
+  input.focus();
 }
 function onEmChange(){
   const a=document.getElementById('em-amt').value,m=document.getElementById('em-mer').value;
