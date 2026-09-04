@@ -816,6 +816,14 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div class="hdr-btn" onclick="openAddGoal()">＋</div>
   </div></div>
 
+  <!-- 목표/상품찾기를 한 화면에 다 늘어놓으면 스크롤이 너무 길고 산만해서, 서브탭으로 나눈다.
+       하단 탭 개수를 늘리면(번잡해 보인다는 우려) 안 되니 이 화면 안에서만 토글한다. -->
+  <div style="display:flex;gap:8px;padding:0 22px 18px">
+    <button id="goals-tab-goal" onclick="setGoalsSubtab('goal')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🎯 목표</button>
+    <button id="goals-tab-products" onclick="setGoalsSubtab('products')" style="flex:1;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🏦 상품찾기</button>
+  </div>
+
+  <div id="goals-subtab-goal-wrap">
   <!-- 저축 히어로 -->
   <div class="sav-hero">
     <div class="sav-hero-lbl">전체 저축액</div>
@@ -851,7 +859,9 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 
   <div class="sec"><div class="sec-hdr"><div class="sec-title">목표 진행률</div></div><div id="goals-list"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">추천</div></div><div id="goal-reco"></div></div>
+  </div><!-- /goals-subtab-goal-wrap -->
 
+  <div id="goals-subtab-products-wrap" style="display:none">
   <div class="sec" style="margin-bottom:0">
     <div class="sec-hdr"><div class="sec-title">저축상품 추천</div></div>
     <div class="s-card" style="margin:0 0 10px">
@@ -909,7 +919,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
       <div style="display:flex;gap:8px">
         <div style="flex:1"><div class="f-lbl2">정렬</div>
           <select id="bp-sort" onchange="renderBankProdFinder()" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit">
-            <option value="rate">기본금리순</option><option value="net">실수령액순</option><option value="bank">은행명순</option>
+            <option value="trust" selected>잘 아는 은행 우선</option><option value="rate">기본금리순</option><option value="net">실수령액순</option><option value="bank">은행명순</option>
           </select>
         </div>
         <div style="flex:1;display:flex;flex-direction:column">
@@ -923,6 +933,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div id="bankprod-list"></div>
     <div id="bankprod-compare-wrap"></div>
   </div>
+  </div><!-- /goals-subtab-products-wrap -->
 </div>
 
 <!-- ═══ STATS ═══ -->
@@ -1892,6 +1903,35 @@ function checkGovSavReminders(){
    금리는 dcls_month(공시월) 단위로 바뀌는 정보라 하루 한 번 갱신이면 충분하다. */
 let BP_TYPE='deposit';
 let BP_LAST_ROWS={};
+/* 금리 순으로만 정렬하면 소형 저축은행이 상위권을 도배한다 — 브랜드 인지도가 낮을수록
+   예금을 끌어오려고 금리를 높게 걸기 때문에 구조적으로 그렇게 된다. "처음 들어보는 은행만
+   나온다"는 피드백은 이 정렬 방식 자체의 문제였다. 그래서 실제 데이터에 등장하는 101개
+   금융기관을 직접 확인해서(2026-09) 인지도 등급을 매겨두고, 기본 정렬은 금리가 아니라
+   이 등급을 우선으로 바꿨다 — 등급 안에서는 여전히 금리 높은 순.
+   1=전국구 시중·인터넷은행, 2=지방은행(정식 은행권, 지역에서 매우 익숙), 3=대형/유명 저축은행
+   (대중광고 하거나 대형 금융지주 계열), 4=그 외 소규모 저축은행. */
+const BANK_TIER_1=new Set(['국민은행','신한은행','우리은행','한국스탠다드차타드은행','주식회사 하나은행','중소기업은행','농협은행주식회사','한국산업은행','주식회사 카카오뱅크','주식회사 케이뱅크','토스뱅크 주식회사']);
+const BANK_TIER_2=new Set(['경남은행','광주은행','부산은행','수협은행','아이엠뱅크','전북은행','제주은행']);
+const BANK_TIER_3=new Set(['SBI저축은행','OK저축은행','웰컴저축은행','페퍼저축은행','애큐온저축은행','한국투자저축은행','상상인저축은행','상상인플러스저축은행','다올저축은행','키움저축은행','신한저축은행','하나저축은행','우리금융저축은행','우리저축은행','IBK저축은행','KB저축은행']);
+function bankTier(bank){
+  if(BANK_TIER_1.has(bank))return 1;
+  if(BANK_TIER_2.has(bank))return 2;
+  if(BANK_TIER_3.has(bank))return 3;
+  return 4;
+}
+const BANK_TIER_META={
+  1:{label:'시중·인터넷은행',color:'var(--green)',bg:'rgba(46,139,87,.12)'},
+  2:{label:'지방은행',color:'var(--blue)',bg:'rgba(33,114,166,.12)'},
+  3:{label:'대형 저축은행',color:'var(--purple)',bg:'rgba(184,115,14,.12)'},
+  4:{label:'저축은행',color:'var(--t3)',bg:'var(--card2)'}
+};
+/* 법인 등기명 그대로("주식회사 카카오뱅크") 뜨면 낯설어 보여서, 실제로 부르는 이름으로 다듬는다. */
+const BANK_DISPLAY_NAME={
+  '주식회사 카카오뱅크':'카카오뱅크','주식회사 케이뱅크':'케이뱅크','주식회사 하나은행':'하나은행',
+  '토스뱅크 주식회사':'토스뱅크','농협은행주식회사':'NH농협은행','중소기업은행':'IBK기업은행',
+  '아이엠뱅크':'iM뱅크(대구은행)','한국스탠다드차타드은행':'SC제일은행'
+};
+function bankDisplayName(bank){return BANK_DISPLAY_NAME[bank]||bank;}
 /* 체크박스 대신 버튼형 토글로 바꾼 필터(비대면만/은행별로 묶기)의 켜짐 상태.
    버튼은 셀렉트박스들과 같은 톤으로 맞춰서 "검색 조건 / 정렬" 두 구역이 시각적으로도
    구분되게 하려는 것 — 예전엔 체크박스·셀렉트가 뒤섞여 있어서 뭐가 필터고 뭐가 정렬인지
@@ -2041,12 +2081,13 @@ async function renderBankProdFinder(){
   const cmp=(a,b)=>{
     if(sortMode==='bank')return a.bank.localeCompare(b.bank,'ko');
     if(sortMode==='net')return(b.calc?b.calc.net:-1)-(a.calc?a.calc.net:-1);
+    if(sortMode==='trust'){const t=bankTier(a.bank)-bankTier(b.bank);return t!==0?t:b.rate-a.rate;}
     return b.rate-a.rate;
   };
   rows.sort(cmp);
   BP_LAST_ROWS={};
   rows.forEach(r=>{BP_LAST_ROWS[r.id]={id:r.id,type:type,bank:r.bank,name:r.name,sector:r.sector,joinWay:r.joinWay,joinMember:r.joinMember,spclCnd:r.spclCnd,etcNote:r.etcNote,maxLimit:r.maxLimit,term:r.term,rate:r.rate,rateMax:r.rateMax,rateType:r.rateType,rsrvType:r.rsrvType,freeApprox:r.freeApprox};});
-  const sortLabel=sortMode==='bank'?'은행명순':sortMode==='net'?'실수령액순':'기본금리순';
+  const sortLabel=sortMode==='bank'?'은행명순':sortMode==='net'?'실수령액순':sortMode==='trust'?'잘 아는 은행 우선':'기본금리순';
   if(groupByBank){
     const groups={};
     rows.forEach(r=>{(groups[r.bank]=groups[r.bank]||[]).push(r);});
@@ -2061,7 +2102,7 @@ async function renderBankProdFinder(){
         // 관심 등록해둔 상품이 "더보기" 안에 숨어있으면 자동으로 펼쳐서, 등록한 걸 놓치지 않게 한다
         const hasWatchedInRest=rest.some(r=>BankProdWatchRepo.isWatched(r.id));
         return bankProdCardHtml(g.items[0],type)+
-          (rest.length?`<details${hasWatchedInRest?' open':''} style="margin:-4px 0 10px 2px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer;padding:4px 2px">${esc(g.bank)} 상품 더보기 (${rest.length}개)${hasWatchedInRest?' ★':''}</summary>${rest.map(r=>bankProdCardHtml(r,type)).join('')}</details>`:'');
+          (rest.length?`<details${hasWatchedInRest?' open':''} style="margin:-4px 0 10px 2px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer;padding:4px 2px">${esc(bankDisplayName(g.bank))} 상품 더보기 (${rest.length}개)${hasWatchedInRest?' ★':''}</summary>${rest.map(r=>bankProdCardHtml(r,type)).join('')}</details>`:'');
       }).join('');
   }else{
     const top=rows.slice(0,20);
@@ -2076,11 +2117,13 @@ function bankProdCardHtml(r,type){
     :`<div style="font-size:11.5px;color:var(--t3);margin-top:4px">${type==='deposit'?'예치금액':'월 납입액'}을 입력하면 예상 실수령액을 계산해드려요</div>`;
   const cappedLine=r.capped?`<div style="font-size:11px;color:var(--purple);margin-top:6px">⚠️ 가입한도 ${fmt(r.maxLimit)}까지만 이 금리가 적용돼요 — 위 금액은 한도 기준으로 계산했어요</div>`:'';
   const freeApproxLine=r.freeApprox?`<div style="font-size:11px;color:var(--t3);margin-top:6px">ℹ️ 자유적립식은 매달 넣는 금액이 자유라, 위 금액은 &ldquo;매달 똑같이 납입&rdquo;했다고 가정한 추정치예요</div>`:'';
+  const tier=bankTier(r.bank),tm=BANK_TIER_META[tier];
+  const trustLine=tier===4?`<div style="font-size:11px;color:var(--t3);margin-top:6px">🛡 낯선 이름이어도 예금자보호법상 5천만원까지는 시중은행과 동일하게 보호돼요</div>`:'';
   return`
   <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px">
-      <span style="font-size:14.5px;font-weight:800">${esc(r.bank)}</span>
-      <span style="font-size:10px;font-weight:700;color:var(--t3);background:var(--card2);border-radius:20px;padding:3px 9px">${esc(r.sector)}</span>
+      <span style="font-size:14.5px;font-weight:800">${esc(bankDisplayName(r.bank))}</span>
+      <span style="font-size:10px;font-weight:700;color:${tm.color};background:${tm.bg};border-radius:20px;padding:3px 9px;white-space:nowrap">${esc(tm.label)}</span>
     </div>
     <div style="font-size:13px;color:var(--t2);margin-bottom:8px">${esc(r.name)}${r.rsrvType?` · ${esc(r.rsrvType)}`:''}</div>
     <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
@@ -2091,6 +2134,7 @@ function bankProdCardHtml(r,type){
     ${netLine}
     ${cappedLine}
     ${freeApproxLine}
+    ${trustLine}
     <div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(r.joinWay)}${r.joinMember?` · 가입대상: ${esc(r.joinMember)}`:''}</div>
     ${r.spclCnd&&r.spclCnd!=='해당사항 없음'?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--purple);cursor:pointer;font-weight:700">우대조건 상세 보기 (최고금리 받으려면)</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.spclCnd)}</div></details>`:''}
     ${r.etcNote?`<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--t3);cursor:pointer">가입조건 원문 보기</summary><div style="font-size:11.5px;color:var(--t3);line-height:1.5;white-space:pre-wrap;margin-top:6px;background:var(--bg2);border-radius:var(--r-sm);padding:8px 10px">${esc(r.etcNote)}</div></details>`:''}
@@ -2144,13 +2188,14 @@ function renderBankProdCompare(){
     else cons.push('🏢 영업점 방문 가입만 가능');
     if(i.rateMax>i.rate)cons.push(`⚠️ 최고 ${i.rateMax}%는 우대조건 충족 시만 적용 (미충족 시 ${i.rate}%)`);
     if(i.sector==='저축은행')pros.push('🏦 저축은행 — 통상 시중은행보다 금리가 높음');
+    if(bankTier(i.bank)===4)pros.push('🛡 낯선 이름이어도 예금자보호법상 5천만원까지는 시중은행과 동일하게 보호돼요');
     if(i.type==='deposit'&&i._amt>50000000)cons.push('⚠️ 예금자보호 한도(1인당 금융기관별 원금+이자 5천만원) 초과 가능성');
     if(i._capped)cons.push(`⚠️ 가입한도 ${fmt(i.maxLimit)}까지만 이 금리가 적용돼요 (그 이상은 별도 관리 필요)`);
     if(i.freeApprox)cons.push('ℹ️ 자유적립식 — 매달 똑같이 납입했다고 가정한 추정치');
     return`
     <div class="savprod-card" style="border:1px solid var(--line);border-radius:var(--r-md);padding:16px;margin-bottom:10px;background:var(--card)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px">
-        <span style="font-size:14px;font-weight:800">${esc(i.bank)} · ${esc(i.name)}</span>
+        <span style="font-size:14px;font-weight:800">${esc(bankDisplayName(i.bank))} · ${esc(i.name)}</span>
         <button onclick="toggleBankProdWatch('${i.id}')" style="background:none;border:none;color:var(--t3);font-size:17px;cursor:pointer;line-height:1;padding:2px 4px">✕</button>
       </div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:2px">${i.type==='deposit'?'예금':'적금'} · ${i.term}개월 · 기본 ${i.rate}%${i.rateMax>i.rate?` (최고 ${i.rateMax}%)`:''} · ${esc(i.rateType)}</div>
@@ -3214,6 +3259,7 @@ function openCatEmojiPicker(id){
 /* ═══════════════════════════ GOALS ═══════════════════════════ */
 let editGid=null,goalEmoji='🎯';
 function openAddGoal(){
+  setGoalsSubtab('goal'); // 상품찾기 탭에서 눌러도 목표 추가 폼은 목표 탭에 있으니 먼저 전환
   editGid=null;goalEmoji='🎯';
   document.getElementById('goal-form-title').textContent='새 목표 추가';
   document.getElementById('g-emo-btn').textContent='🎯';
@@ -3225,6 +3271,7 @@ function openAddGoal(){
   window.scrollTo(0,0);
 }
 function editGoal(id){
+  setGoalsSubtab('goal');
   const g=GoalRepo.all().find(x=>x.id===id);if(!g)return;
   editGid=id;goalEmoji=g.emoji||'🎯';
   document.getElementById('goal-form-title').textContent='목표 수정';
@@ -3253,7 +3300,21 @@ function saveGoal(){
 function delGoal(id){
   showConfirm('목표를 삭제할까요?','연결된 저축 내역은 유지되지만 목표 연결은 해제돼요.',()=>{GoalRepo.del(id);renderGoalsPage();showToast('🗑 삭제됐어요');});
 }
+/* '목표'/'상품찾기' 서브탭 상태는 세션 동안(뒤로 갔다 다시 들어와도) 유지한다 —
+   renderGoalsPage()가 다른 이유로(목표 추가/삭제 등) 다시 불릴 때마다 무조건 '목표' 탭으로
+   되돌아가버리면, 상품찾기 보던 중 관심상품 하나 눌렀는데 탭이 리셋되는 것처럼 느껴진다. */
+let _goalsSubtab='goal';
+function setGoalsSubtab(which){
+  _goalsSubtab=which;
+  const map={goal:'goals-subtab-goal-wrap',products:'goals-subtab-products-wrap'};
+  Object.keys(map).forEach(k=>{
+    const wrap=document.getElementById(map[k]);if(wrap)wrap.style.display=k===which?'block':'none';
+    const btn=document.getElementById('goals-tab-'+k);
+    if(btn){btn.style.background=k===which?'var(--purple)':'var(--bg2)';btn.style.color=k===which?'var(--on-color)':'var(--t2)';}
+  });
+}
 function renderGoalsPage(){
+  setGoalsSubtab(_goalsSubtab);
   const all=SavRepo.all();
   const total=sumAmt(all);
   const{start,end}=PeriodStore.getRange();
