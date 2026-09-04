@@ -688,6 +688,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   <div class="period-badge" id="home-period-badge" style="margin:0 22px 20px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px"></div>
   <div id="home-alerts"></div>
   <div id="home-sub-badge"></div>
+  <div class="sec" id="quick-cat-sec"><div class="sec-hdr"><div class="sec-title">⚡ 빠른 기록</div></div><div id="quick-cat-row" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">카테고리별 예산</div><div class="sec-link" onclick="navTo('settings')">설정</div></div><div id="home-cat-prog"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 지출</div><div class="sec-link" onclick="navTo('hist-exp')">전체</div></div><div class="tx-card" id="h-rec-exp"></div></div>
   <div class="sec"><div class="sec-hdr"><div class="sec-title">최근 수입</div><div class="sec-link" onclick="navTo('hist-inc')">전체</div></div><div class="tx-card" id="h-rec-inc"></div></div>
@@ -1278,6 +1279,16 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
   </div>
 </div>
 
+<!-- Quick amount modal (⚡ 빠른 기록: 카테고리 선택 후 금액만) -->
+<div class="modal-bg" id="quickamt-modal" onclick="closeQuickAmtModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="quickamt-title">📦 카테고리</div>
+    <input class="f-in big-exp" id="quickamt-in" type="number" inputmode="numeric" placeholder="0" min="0" style="text-align:center;margin-bottom:18px" oninput="onQuickAmtChange()" onkeydown="if(event.key==='Enter'&&!document.getElementById('quickamt-save').disabled)saveQuickAmt()">
+    <button class="save-btn exp-btn" id="quickamt-save" onclick="saveQuickAmt()" disabled>저장</button>
+  </div>
+</div>
+
 <!-- Confirm modal -->
 <div class="confirm-bg" id="confirm-bg">
   <div class="confirm-box">
@@ -1721,6 +1732,35 @@ function catsForType(type){return type==='exp'?CatRepo.get():type==='inc'?IncCat
 function catAggSpent(cat,spentMap,allCats){
   const kids=(allCats||CatRepo.get()).filter(c=>c.parentId===cat.id);
   return(spentMap[cat.name]||0)+kids.reduce((s,k)=>s+(spentMap[k.name]||0),0);
+}
+/* 방금 기록한 지출의 카테고리(세부 항목이면 그 대분류) 예산 소진율을 저장 즉시 보여주기 위한 계산.
+   예산 자체가(대분류 기준으로) 0원이면 보여줄 게 없으니 null. */
+function budgetFeedback(catName){
+  const allCats=CatRepo.get();
+  let cat=allCats.find(c=>c.name===catName);
+  if(!cat)return null;
+  if(cat.parentId){const parent=allCats.find(c=>c.id===cat.parentId);if(parent)cat=parent;}
+  const budget=cat.budget||0;
+  if(budget<=0)return null;
+  const{start,end}=PeriodStore.getRange();
+  const spent={};
+  expOfPeriod(start,end).forEach(e=>{spent[e.category]=(spent[e.category]||0)+e.amount;});
+  const use=catAggSpent(cat,spent,allCats);
+  const pct=Math.min(999,Math.round(use/budget*100));
+  const left=budget-use;
+  if(left>=0)return`${cat.emoji||'📦'} ${cat.name} 예산 ${pct}% 사용 (${fmt(left)} 남음)`;
+  return`${cat.emoji||'📦'} ${cat.name} 예산 ${fmt(Math.abs(left))} 초과했어요`;
+}
+/* 같은 날짜에 같은 금액, 상호명까지 겹치거나 서로를 포함하면(지점명 차이 등) 중복 입력일
+   가능성이 높다고 보고 저장 전에 한 번 더 확인시킨다. 날짜+금액을 먼저 정확히 맞춘 다음에만
+   상호명을 비교해서, 전혀 다른 지출을 우연히 걸러버리는 걸 최소화한다. */
+function findPossibleDuplicate(date,amount,merchant){
+  const nm=norm(merchant);if(!nm)return null;
+  return ExpRepo.all().find(e=>{
+    if(e.date!==date||e.amount!==amount||!e.merchant)return false;
+    const enm=norm(e.merchant);
+    return enm===nm||enm.includes(nm)||nm.includes(enm);
+  })||null;
 }
 const GoalRepo={
   _k:'bh2_goals', _c:'goals',
@@ -2174,7 +2214,20 @@ const LearnedRepo={
   _k:'bh2_learned',
   all(){try{return JSON.parse(localStorage.getItem(this._k)||'{}')}catch{return{}}},
   set(m,catId){const r=this.all();r[norm(m)]=catId;localStorage.setItem(this._k,JSON.stringify(r))},
-  get(m){return this.all()[norm(m)]||null},
+  /* "스타벅스"로 배운 규칙이 "스타벅스 강남점"·"스타벅스 홍대점"에도 그대로 적용되게,
+     정확히 일치하는 게 없으면 지금 상호명에 포함되는 배운 상호명 중 가장 긴(=가장 구체적인) 걸 쓴다.
+     1글자짜리 배운 키까지 부분일치시키면 엉뚱하게 걸릴 수 있어 2글자 이상만 대상으로 삼는다. */
+  get(m){
+    const rules=this.all();
+    const nm=norm(m);
+    if(!nm)return null;
+    if(rules[nm])return rules[nm];
+    let bestKey=null;
+    for(const key in rules){
+      if(key.length>=2&&nm.includes(key)&&(!bestKey||key.length>bestKey.length))bestKey=key;
+    }
+    return bestKey?rules[bestKey]:null;
+  },
   clear(){localStorage.removeItem(this._k)}
 };
 
@@ -2453,6 +2506,7 @@ function renderHome(){
   renderPeriodBadge('home-period-badge');
   renderHomeAlerts(exp,pexp);
   notifyIfNeeded(exp,pexp);
+  renderQuickCatRow();
   renderCatProg('home-cat-prog',el,pel);
   renderRecent('h-rec-exp',el.slice(0,4),'exp');
   renderRecent('h-rec-inc',il.slice(0,4),'inc');
@@ -2512,7 +2566,24 @@ function renderHomeAlerts(exp,pexp){
       <div style="font-size:12px;color:var(--t3);margin-top:4px">${overdue.map(s=>esc(s.name)).join(', ')} 결제 기록이 아직 없어요.</div>
     </div></div>`);
   }
+  const gap=recordGapDays();
+  if(gap!==null&&gap>=3){
+    cards.push(`<div class="sec" style="padding:0;cursor:pointer" onclick="navTo('expense')"><div style="background:rgba(107,104,238,.08);border:1px solid rgba(107,104,238,.25);border-radius:16px;padding:14px 16px;margin:0 22px 12px">
+      <div style="font-size:13px;font-weight:700;color:var(--t1)">✍️ 최근 ${gap}일간 기록이 없어요</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">놓친 지출이 있다면 지금 기록해보세요.</div>
+    </div></div>`);
+  }
   el.innerHTML=cards.join('');
+}
+/* 마지막으로 뭔가(지출/수입/저축) 기록한 날짜와 오늘 사이 며칠이 비었는지.
+   기록이 거의 없는 신규 사용자한테까지 이 배너를 띄우면 오히려 거슬리므로,
+   최소한의 사용 이력(3건 이상)이 쌓인 다음부터만 계산한다. */
+function recordGapDays(){
+  const dates=[...ExpRepo.all(),...IncRepo.all(),...SavRepo.all()].map(x=>x.date).filter(Boolean);
+  if(dates.length<3)return null;
+  const lastDate=dates.slice().sort().slice(-1)[0];
+  const gap=Math.round((new Date(today_())-new Date(lastDate))/86400000);
+  return gap>=0?gap:null;
 }
 
 /* Period badge shown at top of Home & Stats — shows active range + change button */
@@ -2854,16 +2925,27 @@ function onEmChange(){
 }
 function saveExp(){
   const amt=parseInt(document.getElementById('em-amt').value),mer=document.getElementById('em-mer').value;
-  const date=getDateStr('em-date'),cat=selCat.em,pay=selPay.em;
+  const date=getDateStr('em-date')||today_(),cat=selCat.em,pay=selPay.em;
   let memo=document.getElementById('em-memo').value;
   const itemsMemo=itemsToMemo();
   if(itemsMemo)memo=memo?memo+' · '+itemsMemo:itemsMemo;
   if(!amt||amt<=0||!mer){showToast('⚠️ 올바른 금액과 상호명을 입력해주세요');return;}
-  if(cat!==classify(mer)){const catObj=CatRepo.get().find(c=>c.name===cat);if(catObj)LearnedRepo.set(mer,catObj.id);}
   const items=itemsMemo?_expItems.filter(it=>it.label&&it.label.trim()&&it.amount>0):undefined;
-  ExpRepo.add({id:uid(),amount:amt,merchant:mer,category:cat,date:date||today_(),payment:pay,memo,items,createdAt:new Date().toISOString()});
+  const dup=findPossibleDuplicate(date,amt,mer);
+  if(dup){
+    showConfirm('비슷한 지출이 이미 있어요',`${date} · ${dup.merchant} · ${fmt(dup.amount)}이 이미 기록돼 있어요. 그래도 저장할까요?`,()=>_finishSaveExp(amt,mer,date,cat,pay,memo,items),'그래도 저장');
+    return;
+  }
+  _finishSaveExp(amt,mer,date,cat,pay,memo,items);
+}
+function _finishSaveExp(amt,mer,date,cat,pay,memo,items){
+  if(cat!==classify(mer)){const catObj=CatRepo.get().find(c=>c.name===cat);if(catObj)LearnedRepo.set(mer,catObj.id);}
+  ExpRepo.add({id:uid(),amount:amt,merchant:mer,category:cat,date,payment:pay,memo,items,createdAt:new Date().toISOString()});
   const askedSub=handleSubscriptionExpense(cat,mer,date,amt);
-  if(!askedSub)showToast('✅ 지출 기록 완료!');
+  if(!askedSub){
+    const fb=budgetFeedback(cat);
+    showToast(fb?`✅ 저장 완료! ${fb}`:'✅ 지출 기록 완료!');
+  }
   navTo('home');
 }
 let _qd={};
@@ -2880,9 +2962,21 @@ function parseQuick(val){
 }
 function saveQuick(){
   if(!_qd.amt)return;
-  ExpRepo.add({id:uid(),amount:_qd.amt,merchant:_qd.mer,category:_qd.cat,date:today_(),payment:'카드',memo:'',createdAt:new Date().toISOString()});
-  const askedSub=handleSubscriptionExpense(_qd.cat,_qd.mer,today_(),_qd.amt);
-  if(!askedSub)showToast('✅ '+_qd.mer+' 기록 완료!');
+  const date=today_();
+  const dup=findPossibleDuplicate(date,_qd.amt,_qd.mer);
+  if(dup){
+    showConfirm('비슷한 지출이 이미 있어요',`${date} · ${dup.merchant} · ${fmt(dup.amount)}이 이미 기록돼 있어요. 그래도 저장할까요?`,()=>_finishSaveQuick(date),'그래도 저장');
+    return;
+  }
+  _finishSaveQuick(date);
+}
+function _finishSaveQuick(date){
+  ExpRepo.add({id:uid(),amount:_qd.amt,merchant:_qd.mer,category:_qd.cat,date,payment:'카드',memo:'',createdAt:new Date().toISOString()});
+  const askedSub=handleSubscriptionExpense(_qd.cat,_qd.mer,date,_qd.amt);
+  if(!askedSub){
+    const fb=budgetFeedback(_qd.cat);
+    showToast(fb?`✅ 저장 완료! ${fb}`:'✅ '+_qd.mer+' 기록 완료!');
+  }
   document.getElementById('eq-in').value='';_qd={};document.getElementById('eq-parsed').classList.remove('on');document.getElementById('eq-save').disabled=true;
   navTo('home');
 }
@@ -3066,6 +3160,47 @@ function openEmojiPickerGeneric(current,cb){
 }
 function _emojiPicked(e){if(_emojiPickerCb)_emojiPickerCb(e);document.getElementById('emoji-modal').classList.remove('on');}
 function closeEmojiModal(ev){if(!ev||ev.target.id==='emoji-modal')document.getElementById('emoji-modal').classList.remove('on');}
+/* ═══════════════════════════ 빠른 기록 (카테고리 먼저 → 금액만) ═══════════════════════════
+   카테고리가 거의 안 바뀌는 반복 지출(매일 다른 점심값 등)을 위한 최소 동작 입력.
+   상호명은 따로 안 받고 카테고리 이름을 그대로 상호명으로 써서, 탭 한 번 + 숫자 입력만으로 끝낸다. */
+function renderQuickCatRow(){
+  const el=document.getElementById('quick-cat-row');const sec=document.getElementById('quick-cat-sec');
+  if(!el||!sec)return;
+  const tops=CatRepo.topLevel();
+  if(!tops.length){sec.style.display='none';return;}
+  sec.style.display='block';
+  el.innerHTML=tops.map(c=>`<button type="button" onclick="openQuickAmt('${c.id}')" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 16px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--t2);cursor:pointer;font-family:inherit"><span style="font-size:20px">${c.emoji||'📦'}</span><span style="font-size:11px;font-weight:700;white-space:nowrap">${esc(c.name)}</span></button>`).join('');
+}
+let _quickAmtCatId=null;
+function openQuickAmt(catId){
+  const cat=CatRepo.get().find(c=>c.id===catId);if(!cat)return;
+  _quickAmtCatId=catId;
+  document.getElementById('quickamt-title').textContent=`${cat.emoji||'📦'} ${cat.name}`;
+  document.getElementById('quickamt-in').value='';
+  document.getElementById('quickamt-save').disabled=true;
+  document.getElementById('quickamt-modal').classList.add('on');
+  setTimeout(()=>document.getElementById('quickamt-in').focus(),150);
+}
+function closeQuickAmtModal(ev){if(!ev||ev.target.id==='quickamt-modal')document.getElementById('quickamt-modal').classList.remove('on');}
+function onQuickAmtChange(){
+  const v=parseInt(document.getElementById('quickamt-in').value);
+  document.getElementById('quickamt-save').disabled=!v||v<=0;
+}
+function saveQuickAmt(){
+  const amt=parseInt(document.getElementById('quickamt-in').value);
+  if(!amt||amt<=0)return;
+  const cat=CatRepo.get().find(c=>c.id===_quickAmtCatId);
+  if(!cat){showToast('⚠️ 카테고리를 찾을 수 없어요');closeQuickAmtModal();return;}
+  const date=today_();
+  ExpRepo.add({id:uid(),amount:amt,merchant:cat.name,category:cat.name,date,payment:'카드',memo:'',createdAt:new Date().toISOString()});
+  const askedSub=handleSubscriptionExpense(cat.name,cat.name,date,amt);
+  document.getElementById('quickamt-modal').classList.remove('on');
+  if(!askedSub){
+    const fb=budgetFeedback(cat.name);
+    showToast(fb?`✅ 저장 완료! ${fb}`:'✅ 지출 기록 완료!');
+  }
+  renderHome();
+}
 function openEmojiPicker(target){
   if(target==='goal'){
     openEmojiPickerGeneric(goalEmoji,(e)=>{goalEmoji=e;document.getElementById('g-emo-btn').textContent=e;});
@@ -4152,6 +4287,8 @@ function parseOcrText(text){
       else if(OCR_SUSPICIOUS_RE.test(merchant))lowConfidence=true;
       const isInc=hasPlus||(OCR_INC_RE.test(line)&&!OCR_EXP_RE.test(line));
       const type=isInc?'inc':'exp';
+      // 지출 인식일 때만 기존 지출 내역과 겹치는지 확인 — 수입은 별도 저장소라 대상이 아님
+      const dupWarning=type==='exp'&&!!findPossibleDuplicate(curDate,amount,merchant);
       items.push({
         _uid:uid(),
         type,
@@ -4160,7 +4297,8 @@ function parseOcrText(text){
         category:type==='inc'?(IncCatRepo.topLevel()[0]?.name||'기타 수입'):classify(merchant),
         date:curDate,
         include:!lowConfidence,
-        lowConfidence
+        lowConfidence,
+        dupWarning
       });
       pendingMerchant=null;
     }else{
@@ -4193,7 +4331,8 @@ function renderOcrItems(){
     const cats=ocrCatsFor(it.type);
     return`
     <div class="ocr-item-card${it.include?'':' excluded'}">
-      ${it.lowConfidence?`<div style="font-size:11px;font-weight:700;color:var(--red);background:rgba(199,64,50,.12);border-radius:20px;padding:3px 9px;display:inline-block;margin-bottom:8px">⚠️ 인식 불확실 — 확인 후 체크해주세요</div>`:''}
+      ${it.lowConfidence?`<div style="font-size:11px;font-weight:700;color:var(--red);background:rgba(199,64,50,.12);border-radius:20px;padding:3px 9px;display:inline-block;margin-bottom:8px;margin-right:6px">⚠️ 인식 불확실 — 확인 후 체크해주세요</div>`:''}
+      ${it.dupWarning?`<div style="font-size:11px;font-weight:700;color:var(--purple);background:rgba(107,104,238,.12);border-radius:20px;padding:3px 9px;display:inline-block;margin-bottom:8px">🔁 같은 날짜·금액 지출이 이미 있어요</div>`:''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <input type="checkbox" ${it.include?'checked':''} onchange="updOcrItem(${i},'include',this.checked)">
         <input class="f-in" style="flex:1;padding:10px 12px" type="text" value="${esc(it.merchant)}" placeholder="상호명" oninput="updOcrItem(${i},'merchant',this.value)">
