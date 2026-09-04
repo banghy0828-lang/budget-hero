@@ -28,11 +28,14 @@ const TYPES = [
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
-      let data = '';
-      res.on('data', (c) => (data += c));
+      // 청크(Buffer)를 곧바로 문자열에 += 하면, 한글처럼 여러 바이트로 이루어진 글자가
+      // 하필 청크 경계에서 잘릴 때 그 글자가 깨진다("HB저축은행" → "HB저축은??" 같은 식).
+      // 청크를 Buffer 배열로 모아뒀다가 다 받은 뒤 한 번에 이어붙여 디코딩하면 안전하다.
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
         } catch (e) {
           reject(e);
         }
