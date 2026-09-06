@@ -913,6 +913,10 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
           <button id="bp-nonbranch-btn" onclick="toggleBpFlag('nonbranch')" style="flex:1;padding:0 8px;border-radius:var(--r-sm);border:1px solid var(--line);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;background:var(--bg2);color:var(--t2)">📱 비대면만</button>
         </div>
       </div>
+      <div style="margin-bottom:8px">
+        <div class="f-lbl2">은행 선택 (검색·복수 선택 가능)</div>
+        <button id="bp-bankpicker-btn" onclick="openBankPicker()" style="width:100%;text-align:left;padding:12px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--bg2);color:var(--t2);font-size:14px;font-family:inherit;cursor:pointer">전체 은행</button>
+      </div>
       <div style="height:1px;background:var(--line);margin:10px 0"></div>
       <!-- 정렬 · 보기 방식: 후보는 그대로 두고 어떤 순서·모양으로 보여줄지만 바꾸는 값들 -->
       <div style="font-size:11px;font-weight:800;color:var(--t3);letter-spacing:.02em;margin-bottom:8px">정렬 · 보기 방식</div>
@@ -1287,6 +1291,20 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div class="modal-handle"></div>
     <div class="modal-title">이모지 선택</div>
     <div class="emoji-grid" id="emoji-grid"></div>
+  </div>
+</div>
+
+<!-- Bank picker modal (은행 예금·적금 찾기: 이름 검색 + 복수 선택) -->
+<div class="modal-bg" id="bankpicker-modal" onclick="closeBankPickerModal(event)">
+  <div class="modal-sheet" onclick="event.stopPropagation()" style="max-height:80dvh;display:flex;flex-direction:column">
+    <div class="modal-handle"></div>
+    <div class="modal-title">은행 선택</div>
+    <input id="bankpicker-search" type="text" placeholder="은행 이름 검색" oninput="renderBankPickerList()" style="width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--bg2);color:var(--t1);font-size:14px;font-family:inherit;margin-bottom:12px;flex-shrink:0">
+    <div id="bankpicker-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;margin-bottom:14px;min-height:100px"></div>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button onclick="clearBankPicker()" style="flex:1;padding:13px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card2);color:var(--t2);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">전체 선택 해제</button>
+      <button onclick="applyBankPicker()" style="flex:1;padding:13px;border-radius:var(--r-md);border:none;background:var(--purple);color:var(--on-color);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">적용</button>
+    </div>
   </div>
 </div>
 
@@ -1960,7 +1978,58 @@ function resetBankProdFilters(){
   document.getElementById('bp-sector').value='all';
   if(BP_FLAGS.nonbranch)toggleBpFlag('nonbranch');
   setBpAmount(BP_TYPE,0);
+  BP_SELECTED_BANKS=new Set();
+  try{localStorage.removeItem('bh2_bp_selected_banks')}catch(e){}
+  updateBankPickerBtnLabel();
   renderBankProdFinder();
+}
+/* 알고리즘이 매긴 "잘 아는 은행 우선" 등급만으론 사람마다 다른 "내가 믿는 은행" 기준을
+   못 맞춘다는 피드백을 받아, 검색+복수선택으로 직접 은행을 고를 수 있게 했다.
+   고른 목록은 로컬에 저장해서 다음에 다시 열어도 유지된다. */
+let BP_SELECTED_BANKS=new Set();
+try{(JSON.parse(localStorage.getItem('bh2_bp_selected_banks')||'[]')).forEach(b=>BP_SELECTED_BANKS.add(b));}catch(e){}
+let _bpPickerPending=new Set();
+let _bpPickerList=[];
+function openBankPicker(){
+  _bpPickerPending=new Set(BP_SELECTED_BANKS);
+  document.getElementById('bankpicker-search').value='';
+  renderBankPickerList();
+  document.getElementById('bankpicker-modal').classList.add('on');
+}
+function closeBankPickerModal(ev){if(!ev||ev.target.id==='bankpicker-modal')document.getElementById('bankpicker-modal').classList.remove('on');}
+function renderBankPickerList(){
+  const el=document.getElementById('bankpicker-list');if(!el)return;
+  const data=BankProdCache[BP_TYPE];
+  const banks=[...new Set((data&&data.products?data.products:[]).map(p=>p.bank))];
+  banks.sort((a,b)=>{const t=bankTier(a)-bankTier(b);return t!==0?t:bankDisplayName(a).localeCompare(bankDisplayName(b),'ko');});
+  const q=norm(document.getElementById('bankpicker-search').value);
+  _bpPickerList=q?banks.filter(b=>norm(bankDisplayName(b)).includes(q)):banks;
+  if(!_bpPickerList.length){el.innerHTML=`<div style="text-align:center;color:var(--t3);font-size:13px;padding:24px 0">검색 결과가 없어요</div>`;return;}
+  el.innerHTML=_bpPickerList.map((b,i)=>{
+    const checked=_bpPickerPending.has(b);
+    const tm=BANK_TIER_META[bankTier(b)];
+    return`<label style="display:flex;align-items:center;gap:10px;padding:11px 4px;cursor:pointer;border-bottom:1px solid var(--line)">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleBankPickerItem(${i},this.checked)" style="width:18px;height:18px;flex-shrink:0">
+      <span style="flex:1;font-size:14px;font-weight:600">${esc(bankDisplayName(b))}</span>
+      <span style="font-size:10px;font-weight:700;color:${tm.color};background:${tm.bg};border-radius:20px;padding:2px 8px;white-space:nowrap">${esc(tm.label)}</span>
+    </label>`;
+  }).join('');
+}
+function toggleBankPickerItem(i,checked){
+  const b=_bpPickerList[i];if(!b)return;
+  if(checked)_bpPickerPending.add(b);else _bpPickerPending.delete(b);
+}
+function clearBankPicker(){_bpPickerPending=new Set();renderBankPickerList();}
+function applyBankPicker(){
+  BP_SELECTED_BANKS=new Set(_bpPickerPending);
+  try{localStorage.setItem('bh2_bp_selected_banks',JSON.stringify([...BP_SELECTED_BANKS]));}catch(e){}
+  document.getElementById('bankpicker-modal').classList.remove('on');
+  updateBankPickerBtnLabel();
+  renderBankProdFinder();
+}
+function updateBankPickerBtnLabel(){
+  const btn=document.getElementById('bp-bankpicker-btn');if(!btn)return;
+  btn.textContent=BP_SELECTED_BANKS.size?`${BP_SELECTED_BANKS.size}개 은행 선택됨`:'전체 은행';
 }
 const BankProdCache={deposit:null,saving:null};
 async function loadBankProdData(type){
@@ -2056,8 +2125,10 @@ async function renderBankProdFinder(){
   const groupByBank=BP_FLAGS.groupbank;
   const calc=type==='deposit'?calcDepositMaturity:calcSavingMaturity;
   let rows=[];
+  updateBankPickerBtnLabel();
   data.products.forEach(p=>{
     if(sectorFilter!=='all'&&p.sector!==sectorFilter)return;
+    if(BP_SELECTED_BANKS.size>0&&!BP_SELECTED_BANKS.has(p.bank))return;
     if(nonBranchOnly&&!/인터넷|스마트폰/.test(p.joinWay||''))return;
     const opts=(p.options||[]).filter(o=>o.term===term);
     if(!opts.length)return;
@@ -2081,7 +2152,8 @@ async function renderBankProdFinder(){
   });
   if(type!==BP_TYPE)return;
   if(!rows.length){
-    el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">🔍</div><div class="empty-t">조건에 맞는 상품이 없어요</div><div class="empty-s">기간을 바꾸거나 필터를 해제해보세요</div></div>`;
+    const emptyHint=BP_SELECTED_BANKS.size>0?'선택한 은행에는 이 기간 상품이 없어요 — 은행 선택을 바꾸거나 기간을 조정해보세요':'기간을 바꾸거나 필터를 해제해보세요';
+    el.innerHTML=`<div class="empty" style="padding:24px 0"><div class="empty-e">🔍</div><div class="empty-t">조건에 맞는 상품이 없어요</div><div class="empty-s">${emptyHint}</div></div>`;
     renderBankProdCompare();
     return;
   }
@@ -3372,6 +3444,11 @@ const GOV_SAVINGS_PRODUCTS=[
     id:'gyeonggi-worker',
     name:'경기도 청년 노동자 통장',
     region:'경기도',
+    /* "경기도"라고만 치면 잡히던 기존 로직은, 실제로는 대부분 사람이 도 이름이 아니라
+       사는 시 이름(수원/성남 등)을 친다는 걸 놓쳐서 사실상 아무도 못 찾는 상품이 돼 있었다
+       (버그로 확인됨, 2026-09-04). 경기도 31개 시·군을 명시해서 실제로 매칭되게 한다.
+       "광주"는 광주광역시와 겹쳐서 혼동을 막으려고 일부러 "광주시"까지 쳐야만 매칭한다. */
+    regionAliases:['수원','성남','고양','용인','부천','안산','안양','남양주','화성','평택','의정부','시흥','파주','김포','광명','군포','이천','양주','오산','구리','안성','포천','의왕','하남','여주','양평','동두천','과천','가평','연천','광주시'],
     ageMin:19,ageMax:39,
     benefit:'매달 10만원 저축 → 2년 후 경기도 예산으로 480만원 현금 + 100만원 지역화폐 지급',
     result:'2년 만기 시 총 580만원 수령',
@@ -3548,7 +3625,13 @@ function renderSavProductReco(){
      전국 상품(region 없음)은 지역 입력과 무관하게 항상 후보. 지금은 경기도 하나뿐이지만,
      이런 지역 상품을 발견할 때마다 하나씩 더 추가하는 방식으로 늘려간다 — "지자체 상품은
      아예 안 보여준다"는 이전 방침에서 "아는 만큼 보여주고, 나머진 링크로 보완한다"로 바꿈. */
-  const regionMatched=p=>!p.region||(regionVal&&(p.region.includes(regionVal)||regionVal.includes(p.region.replace('도','').replace('시',''))));
+  const regionMatched=p=>{
+    if(!p.region)return true;
+    if(!regionVal)return false;
+    if(p.region.includes(regionVal)||regionVal.includes(p.region.replace('도','').replace('시','')))return true;
+    // "경기도"라고 쳐야만 잡히던 걸 보완 — 실제 사는 시·군 이름을 쳐도 매칭되게(등록된 별칭에 한해)
+    return!!(p.regionAliases&&p.regionAliases.some(a=>regionVal.includes(a)||a.includes(regionVal)));
+  };
   const visible=GOV_SAVINGS_PRODUCTS.filter(regionMatched);
   const hasRegionalMatch=regionVal&&visible.some(p=>p.region);
   const eligible=visible.filter(p=>age>=p.ageMin&&age<=p.ageMax);
