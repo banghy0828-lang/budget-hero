@@ -3629,8 +3629,11 @@ function renderSavProductReco(){
     if(!p.region)return true;
     if(!regionVal)return false;
     if(p.region.includes(regionVal)||regionVal.includes(p.region.replace('도','').replace('시','')))return true;
-    // "경기도"라고 쳐야만 잡히던 걸 보완 — 실제 사는 시·군 이름을 쳐도 매칭되게(등록된 별칭에 한해)
-    return!!(p.regionAliases&&p.regionAliases.some(a=>regionVal.includes(a)||a.includes(regionVal)));
+    // "경기도"라고 쳐야만 잡히던 걸 보완 — 실제 사는 시·군 이름을 쳐도 매칭되게(등록된 별칭에 한해).
+    // 방향을 사용자입력→별칭 한쪽으로만 둔다 — 반대 방향까지 허용하면 "광주"(광주광역시)가
+    // "광주시"(경기도 광주시) 별칭에 걸려버리는 것처럼, 짧은 별칭이 긴 입력의 일부라는 이유만으로
+    // 엉뚱하게 매칭되는 사고가 난다.
+    return!!(p.regionAliases&&p.regionAliases.some(a=>regionVal.includes(a)));
   };
   const visible=GOV_SAVINGS_PRODUCTS.filter(regionMatched);
   const hasRegionalMatch=regionVal&&visible.some(p=>p.region);
