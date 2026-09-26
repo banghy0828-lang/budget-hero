@@ -873,11 +873,6 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     </div>
     <div id="savprod-list"></div>
     <div id="savprod-freshness" style="font-size:11px;color:var(--t3);text-align:center;margin:12px 0 4px"></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <a href="https://finlife.fss.or.kr/finlife/svings/fdrmDpst/list.do?menuNo=700002" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:13px 8px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">🏦 정기예금 금리비교 ↗</a>
-      <a href="https://finlife.fss.or.kr/finlife/svings/fdrmEnty/list.do?menuNo=700003" target="_blank" rel="noopener" style="flex:1;display:block;text-align:center;padding:13px 8px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:12.5px;font-weight:700;color:var(--t2);text-decoration:none">🏦 적금 금리비교 ↗</a>
-    </div>
-    <div style="font-size:11px;color:var(--t3);text-align:center;margin-top:6px">둘 다 금융감독원 &ldquo;금융상품 한눈에&rdquo; 공식 사이트 (링크 직접 확인 완료)</div>
     <a href="https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch" target="_blank" rel="noopener" style="display:block;text-align:center;margin-top:8px;padding:13px;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;font-weight:700;color:var(--t2);text-decoration:none">📍 우리 지역 청년정책 찾기 (온통청년 공식, 지역 필터 가능) ↗</a>
   </div>
 
@@ -3074,8 +3069,7 @@ function renderGoalsPage(){
   renderSavProductReco();
 }
 /* ═══════════════════════════ 저축상품 추천 (정부지원) ═══════════════════════════
-   은행 예·적금 비교는 앱 안에서 하지 않고 위쪽 금융감독원 공식 링크로 안내한다.
-   여기서는 조건이 자주 안 바뀌는
+   조건이 자주 안 바뀌는
    전국 단위 정부지원 상품 2개는 나이 조건으로 바로 자격을 걸러서 보여준다.
    출처: 2026년 기준 각 상품 안내(하단 note에 명시). 정확한 소득 조건 등은 상품별로
    따로 있어서 이 화면만으로 최종 자격을 확정하지 않는다 — 반드시 공식 페이지 재확인 필요. */
