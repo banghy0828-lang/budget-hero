@@ -776,6 +776,12 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div class="field"><div class="f-lbl">출처</div><input class="f-in" id="inc-src" type="text" placeholder="회사명 · 출처" maxlength="30" oninput="onIncChange()"></div>
     <div class="field"><div class="f-lbl">날짜</div><div class="date-sel-wrap" id="inc-date-wrap"></div></div>
     <div class="field"><div class="f-lbl">카테고리</div><div class="chips" id="inc-cats"></div></div>
+    <div class="field">
+      <div class="f-lbl">정산할 지출 (선택)</div>
+      <select class="f-in" id="inc-exp-link" style="cursor:pointer" onchange="onIncExpLinkChange()"><option value="">연결 안 함</option></select>
+      <div id="inc-exp-link-hint" style="font-size:12px;color:var(--t3);margin-top:6px;display:none"></div>
+      <div style="font-size:11px;color:var(--t3);line-height:1.5;margin-top:6px">모임에서 대신 계산하고 나중에 입금받을 때, 어떤 지출에 대한 입금인지 연결해두면 얼마나 돌려받았는지 지출 내역에서 볼 수 있어요.</div>
+    </div>
     <div class="field"><div class="f-lbl">메모</div><input class="f-in" id="inc-memo" type="text" placeholder="선택 입력" maxlength="60"></div>
     <button class="save-btn inc-btn" id="inc-save" onclick="saveIncome()" disabled>수입 저장</button>
   </div>
@@ -1206,8 +1212,23 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
     <div class="modal-title" id="et-title">내역 수정</div>
     <div class="field"><div class="f-lbl" id="et-amt-lbl">금액</div><input class="f-in" id="et-amt" type="number" min="0" inputmode="numeric"></div>
     <div class="field"><div class="f-lbl" id="et-name-lbl">이름</div><input class="f-in" id="et-name" type="text" maxlength="30"></div>
+    <div class="field" id="et-items-toggle-wrap" style="display:none;margin-top:-10px">
+      <div onclick="toggleEtItemize()" style="font-size:12.5px;color:var(--purple);font-weight:700;cursor:pointer;display:inline-block">＋ 여러 항목으로 나눠 적기</div>
+    </div>
+    <div class="field" id="et-items-wrap" style="display:none;background:var(--bg2);border:1px solid var(--line2);border-radius:var(--r-sm);padding:12px">
+      <div id="et-items-list" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button type="button" onclick="addEtItemRow()" style="width:100%;margin-top:8px;background:none;border:1.5px dashed var(--line);border-radius:var(--r-sm);padding:9px;font-size:12.5px;font-weight:600;color:var(--t3);cursor:pointer;font-family:inherit">＋ 항목 추가</button>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line2);font-size:12.5px;color:var(--t2);font-weight:700">
+        <span>항목 합계</span><span id="et-items-sum">₩0</span>
+      </div>
+      <div onclick="toggleEtItemize()" style="text-align:center;margin-top:8px;font-size:11.5px;color:var(--t3);cursor:pointer">세부 항목 그만 쓰기</div>
+    </div>
     <div class="field"><div class="f-lbl">날짜</div><div class="date-sel-wrap" id="et-date-wrap"></div></div>
     <div class="field"><div class="f-lbl">카테고리</div><div class="chips" id="et-cats"></div></div>
+    <div class="field" id="et-expense-field" style="display:none">
+      <div class="f-lbl">정산할 지출</div>
+      <select class="f-in" id="et-expense-link" style="cursor:pointer"><option value="">연결 안 함</option></select>
+    </div>
     <div class="field" id="et-pay-field" style="display:none">
       <div class="f-lbl">결제수단</div>
       <div class="pay-chips" id="et-pays">
@@ -2805,12 +2826,46 @@ function _finishSaveQuick(date){
 }
 
 /* ═══════════════════════════ INCOME / SAVING ═══════════════════════════ */
-function initIncForm(){selCat.inc=IncCatRepo.topLevel()[0]?.name||'월급';['inc-amt','inc-src','inc-memo'].forEach(id=>document.getElementById(id).value='');buildDateSel('inc-date-wrap','inc-date',today_());document.getElementById('inc-save').disabled=true;renderChips('inc-cats',IncCatRepo.get(),'inc','sel-inc');}
+/* ═══════════════════════════ 지출 정산(모임 등에서 대신 계산하고 나눠 받기) ═══════════════════════════
+   내가 대신 계산한 지출을 하나 골라서, 나중에 각자 보내주는 돈을 그 지출에 연결된 수입으로
+   기록한다. 지출 자체는 그대로 두고(총 얼마를 냈는지는 안 변함), 수입 쪽에 linkedExpenseId만
+   붙여서 "이 지출에 대해 지금까지 얼마가 들어왔는지"를 나중에 역으로 계산한다. */
+function repaidForExpense(expId,excludeIncId){
+  return IncRepo.all().filter(x=>x.linkedExpenseId===expId&&x.id!==excludeIncId).reduce((s,x)=>s+x.amount,0);
+}
+// 오래된 지출까지 다 보여주면 고르기 힘드니, 최근 90일 안에서 최대 60건만 후보로 보여준다
+function recentExpensesForLink(){
+  const cutoff=addDays(today_(),-90);
+  return ExpRepo.all().filter(e=>e.date>=cutoff).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,60);
+}
+function fillExpenseLinkSelect(selEl,selectedId){
+  const opts=recentExpensesForLink();
+  selEl.innerHTML='<option value="">연결 안 함</option>'+opts.map(e=>
+    `<option value="${e.id}">${fmtD(e.date)} · ${esc(e.merchant)} · ${fmt(e.amount)}</option>`
+  ).join('');
+  selEl.value=selectedId&&opts.some(e=>e.id===selectedId)?selectedId:'';
+}
+function expLinkHint(expId,excludeIncId){
+  const exp=ExpRepo.all().find(e=>e.id===expId);if(!exp)return'';
+  const repaid=repaidForExpense(expId,excludeIncId);
+  const remain=exp.amount-repaid;
+  if(remain<=0)return`✅ ${esc(exp.merchant)} ${fmt(exp.amount)} — 이미 다 받았어요 (${fmt(repaid)} 받음)`;
+  return`💸 ${esc(exp.merchant)} ${fmt(exp.amount)} 중 ${fmt(repaid)} 받음 · 남은 ${fmt(remain)}`;
+}
+function onIncExpLinkChange(){
+  const id=document.getElementById('inc-exp-link').value;
+  const hint=document.getElementById('inc-exp-link-hint');
+  if(!id){hint.style.display='none';return;}
+  hint.textContent=expLinkHint(id);
+  hint.style.display='block';
+}
+function initIncForm(){selCat.inc=IncCatRepo.topLevel()[0]?.name||'월급';['inc-amt','inc-src','inc-memo'].forEach(id=>document.getElementById(id).value='');buildDateSel('inc-date-wrap','inc-date',today_());document.getElementById('inc-save').disabled=true;renderChips('inc-cats',IncCatRepo.get(),'inc','sel-inc');fillExpenseLinkSelect(document.getElementById('inc-exp-link'),'');document.getElementById('inc-exp-link-hint').style.display='none';}
 function onIncChange(){const a=document.getElementById('inc-amt').value,s=document.getElementById('inc-src').value;document.getElementById('inc-save').disabled=!a||!s;}
 function saveIncome(){
   const amt=parseInt(document.getElementById('inc-amt').value),src=document.getElementById('inc-src').value;
   if(!amt||amt<=0||!src){showToast('⚠️ 올바른 금액과 출처를 입력해주세요');return;}
-  IncRepo.add({id:uid(),amount:amt,source:src,category:selCat.inc,date:getDateStr('inc-date'),memo:document.getElementById('inc-memo').value,createdAt:new Date().toISOString()});
+  const linkedExpenseId=document.getElementById('inc-exp-link').value||null;
+  IncRepo.add({id:uid(),amount:amt,source:src,category:selCat.inc,date:getDateStr('inc-date'),memo:document.getElementById('inc-memo').value,linkedExpenseId,createdAt:new Date().toISOString()});
   showToast('✅ 수입 기록 완료!');navTo('home');
 }
 function initSavForm(){
@@ -2864,8 +2919,10 @@ function renderHist(type){
       </div>
       <div class="tx-card" style="margin:0 22px">
         ${items.map(e=>{const ci=(type==='exp'?cats:catsForType(type)).find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
+          const repaid=type==='exp'?repaidForExpense(e.id):0;
+          const settleLine=repaid>0?`<div style="font-size:11px;color:${repaid>=e.amount?'var(--green)':'var(--purple)'};margin-top:2px">${repaid>=e.amount?'✅ 정산 완료':`🔁 정산 ${fmt(repaid)}/${fmt(e.amount)}`}</div>`:'';
           return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
-          <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)}${e.payment?' · '+esc(e.payment):''} · ${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div>
+          <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)}${e.payment?' · '+esc(e.payment):''} · ${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div>${settleLine}</div>
           <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(e.amount)}</div><div class="tx-actions"><button class="tx-edit" onclick="openEditTx('${type}','${e.id}',event)">수정</button><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div></div>`;
         }).join('')}
       </div></div>`;
@@ -2892,6 +2949,44 @@ function delTx(type,id,ev){
   });
 }
 
+/* 지출 수정 화면의 세부 항목(품목) 편집 — 만들 때 쓰는 em-items-* 와 같은 구조를,
+   기존 지출을 고칠 때도 쓸 수 있게 et- 접두사로 그대로 옮겨왔다. 품목을 하나 지우면
+   금액은 남은 품목 합계로, 메모는 남은 품목들로 자동으로 다시 계산된다. */
+let _etItems=[];
+function toggleEtItemize(){
+  const wrap=document.getElementById('et-items-wrap');
+  const showing=wrap.style.display==='block';
+  if(showing){
+    _etItems=[];
+    wrap.style.display='none';
+    document.getElementById('et-items-toggle-wrap').style.display='block';
+    const amtEl=document.getElementById('et-amt');amtEl.readOnly=false;amtEl.style.opacity='1';
+    return;
+  }
+  wrap.style.display='block';
+  document.getElementById('et-items-toggle-wrap').style.display='none';
+  if(!_etItems.length)_etItems=[{label:'',amount:null},{label:'',amount:null}];
+  renderEtItemRows();
+}
+function renderEtItemRows(){
+  document.getElementById('et-items-list').innerHTML=_etItems.map((it,i)=>`
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="text" placeholder="품목명" value="${esc(it.label||'')}" oninput="updateEtItemRow(${i},'label',this.value)" style="flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:13px;font-family:inherit">
+      <input type="number" placeholder="0" inputmode="numeric" value="${it.amount||''}" oninput="updateEtItemRow(${i},'amount',this.value)" style="width:100px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);color:var(--t1);font-size:13px;font-family:inherit">
+      <div onclick="delEtItemRow(${i})" style="width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t3);cursor:pointer;font-size:14px">✕</div>
+    </div>`).join('');
+  recalcEtItemsSum();
+}
+function updateEtItemRow(i,field,val){_etItems[i][field]=field==='amount'?(parseInt(val)||null):val;recalcEtItemsSum();}
+function addEtItemRow(){_etItems.push({label:'',amount:null});renderEtItemRows();}
+function delEtItemRow(i){_etItems.splice(i,1);if(!_etItems.length)_etItems.push({label:'',amount:null});renderEtItemRows();}
+function recalcEtItemsSum(){
+  const sum=_etItems.reduce((s,it)=>s+(it.amount||0),0);
+  document.getElementById('et-items-sum').textContent=fmt(sum);
+  const amtEl=document.getElementById('et-amt');
+  amtEl.value=sum;amtEl.readOnly=true;amtEl.style.opacity='.7';
+}
+
 /* 지출/수입/저축 내역 수정 — 하나의 공용 바텀시트를 타입에 맞게 필드만 바꿔서 재사용 */
 let _etType=null,_etId=null;
 function openEditTx(type,id,ev){
@@ -2904,6 +2999,7 @@ function openEditTx(type,id,ev){
   document.getElementById('et-title').textContent=titleMap[type];
   document.getElementById('et-name-lbl').textContent=nameLblMap[type];
   document.getElementById('et-amt').value=rec.amount;
+  document.getElementById('et-amt').readOnly=false;document.getElementById('et-amt').style.opacity='1';
   document.getElementById('et-name').value=type==='exp'?rec.merchant:type==='inc'?rec.source:rec.name;
   document.getElementById('et-memo').value=rec.memo||'';
   buildDateSel('et-date-wrap','et-date',rec.date||today_());
@@ -2914,12 +3010,23 @@ function openEditTx(type,id,ev){
     selPay.et=rec.payment||'카드';
     document.querySelectorAll('#et-pays .pc').forEach(c=>c.classList.toggle('sel',c.dataset.p===selPay.et));
   }
+  document.getElementById('et-items-toggle-wrap').style.display=type==='exp'?'block':'none';
+  document.getElementById('et-items-wrap').style.display='none';
+  _etItems=[];
+  if(type==='exp'&&rec.items&&rec.items.length){
+    _etItems=rec.items.map(it=>({label:it.label,amount:it.amount}));
+    document.getElementById('et-items-wrap').style.display='block';
+    document.getElementById('et-items-toggle-wrap').style.display='none';
+    renderEtItemRows();
+  }
   document.getElementById('et-goal-field').style.display=type==='sav'?'block':'none';
   if(type==='sav'){
     const sel=document.getElementById('et-goal');sel.innerHTML='<option value="">목표 없음</option>';
     GoalRepo.all().forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=(g.emoji||'🎯')+' '+g.name;sel.appendChild(o);});
     sel.value=rec.goalId||'';
   }
+  document.getElementById('et-expense-field').style.display=type==='inc'?'block':'none';
+  if(type==='inc')fillExpenseLinkSelect(document.getElementById('et-expense-link'),rec.linkedExpenseId||'');
   document.getElementById('edit-tx-modal').classList.add('on');
 }
 function closeEditTx(ev){if(!ev||ev.target.id==='edit-tx-modal')document.getElementById('edit-tx-modal').classList.remove('on');}
@@ -2933,9 +3040,17 @@ function saveEditTx(){
   const patch={amount:amt,category:selCat.et,date,memo};
   if(type==='exp'){
     patch.merchant=name;patch.payment=selPay.et||'카드';
+    const validItems=_etItems.filter(it=>it.label&&it.label.trim()&&it.amount>0);
+    if(validItems.length){
+      patch.items=validItems;
+      patch.memo=validItems.map(it=>`${it.label.trim()} ${fmt(it.amount)}`).join(' · ');
+    }else{
+      patch.items=undefined;
+    }
     ExpRepo.update(id,patch);
   }else if(type==='inc'){
     patch.source=name;
+    patch.linkedExpenseId=document.getElementById('et-expense-link').value||null;
     IncRepo.update(id,patch);
   }else{
     patch.name=name;
