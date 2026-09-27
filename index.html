@@ -1868,7 +1868,7 @@ function budgetFeedback(catName){
   if(budget<=0)return null;
   const{start,end}=PeriodStore.getRange();
   const spent={};
-  expOfPeriod(start,end).forEach(e=>{spent[e.category]=(spent[e.category]||0)+e.amount;});
+  expOfPeriod(start,end).forEach(e=>{spent[e.category]=(spent[e.category]||0)+expNet(e);});
   const use=catAggSpent(cat,spent,allCats);
   const pct=Math.min(999,Math.round(use/budget*100));
   const left=budget-use;
@@ -2096,6 +2096,11 @@ function fmtShort(n){
 }
 function fmtD(d){if(!d)return'';const dt=new Date(d+'T00:00:00');return`${dt.getMonth()+1}/${dt.getDate()}`}
 function sumAmt(arr){return arr.reduce((s,e)=>s+(e.amount||0),0)}
+/* 모임에서 대신 계산하고 나중에 정산받은 지출은, 실제로 내가 부담한 금액(정산받은 만큼 뺀 나머지)이
+   진짜 의미 있는 지출이다. 그래서 지출을 보여주거나 합산하는 모든 곳에서 원래 금액 대신 이 값을 쓴다.
+   정산금이 원래 금액보다 커지면(더 받았으면) 지출이 마이너스로 보이지 않게 0으로 막는다. */
+function expNet(e){return Math.max(0,e.amount-repaidForExpense(e.id));}
+function sumExpNet(arr){return arr.reduce((s,e)=>s+expNet(e),0);}
 
 /* ───────── DATE HELPERS (pure Date math, no string-month assumptions) ───────── */
 function toDateObj(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
@@ -2336,12 +2341,15 @@ function renderHome(){
   const{start:pstart,end:pend}=PeriodStore.getPrevRange();
   const el=expOfPeriod(start,end),il=incOfPeriod(start,end),sl=savOfPeriod(start,end);
   const pel=expOfPeriod(pstart,pend),pil=incOfPeriod(pstart,pend);
-  const inc=sumAmt(il),exp=sumAmt(el),sav=sumAmt(sl);
+  const inc=sumAmt(il),exp=sumExpNet(el),sav=sumAmt(sl);
   const budget=CatRepo.total();
   // 총자산 = 누적 수입 - 누적 지출 (저축은 지출 아님, 기간과 무관하게 전체 누적)
+  // 여기는 실제 통장 잔고 변화와 맞아야 해서 정산 여부와 상관없이 원래 금액 그대로 더하고 뺀다 —
+  // 정산받은 돈도 수입으로 그대로 잡히기 때문에, 원래 금액(지출) - 정산금(수입)을 하면
+  // 어차피 순부담만큼만 줄어들어서 계산이 맞아떨어진다.
   const allInc=sumAmt(IncRepo.all()),allExp=sumAmt(ExpRepo.all());
   const totalAsset=allInc-allExp;
-  const pexp=sumAmt(pel),pinc=sumAmt(pil);
+  const pexp=sumExpNet(pel),pinc=sumAmt(pil);
   document.getElementById('h-total-asset').textContent=(totalAsset>=0?'':'-')+'₩'+Math.abs(totalAsset).toLocaleString();
   document.getElementById('h-inc').textContent=fmt(inc);
   document.getElementById('h-exp').textContent=fmt(exp);
@@ -2520,7 +2528,7 @@ function weekdayInsight(){
   ExpRepo.all().forEach(e=>{
     if(!e.date||e.date>=todayStr)return; // 오늘 이전 데이터만
     if(toDateObj(e.date).getDay()!==dow)return;
-    byDate[e.date]=(byDate[e.date]||0)+e.amount;
+    byDate[e.date]=(byDate[e.date]||0)+expNet(e);
   });
   const pastDates=Object.keys(byDate);
   if(pastDates.length<3)return null;
@@ -2529,7 +2537,7 @@ function weekdayInsight(){
   const useDates=recentDates.length>=3?recentDates:pastDates;
   const avg=Math.round(useDates.reduce((s,d)=>s+byDate[d],0)/useDates.length);
   if(avg<=0)return null;
-  const todayExp=sumAmt(ExpRepo.ofDate(todayStr));
+  const todayExp=sumExpNet(ExpRepo.ofDate(todayStr));
   const dowLabel=['일','월','화','수','목','금','토'][dow]+'요일';
   if(todayExp===0)return`보통 ${dowLabel}엔 평균 <strong>${fmt(avg)}</strong>를 썼어요. 오늘은 아직 지출이 없네요.`;
   const diff=todayExp-avg,pct=Math.round(Math.abs(diff)/avg*100);
@@ -2549,8 +2557,8 @@ function renderCatProg(elId,expList,prevExpList){
   const allCats=CatRepo.get();
   const cats=allCats.filter(c=>!c.parentId&&(c.budget||0)>0);
   const spent={},prev={};
-  for(const e of expList)spent[e.category]=(spent[e.category]||0)+e.amount;
-  for(const e of prevExpList)prev[e.category]=(prev[e.category]||0)+e.amount;
+  for(const e of expList)spent[e.category]=(spent[e.category]||0)+expNet(e);
+  for(const e of prevExpList)prev[e.category]=(prev[e.category]||0)+expNet(e);
   const el=document.getElementById(elId);
   if(!cats.length){el.innerHTML=`<div class="empty"><div class="empty-e">💰</div><div class="empty-t">예산을 설정해 주세요</div><div class="empty-s">설정 탭에서 카테고리별 예산을 입력하세요</div></div>`;return;}
   el.innerHTML=cats.map(c=>buildCpCard(c,catAggSpent(c,spent,allCats),catAggSpent(c,prev,allCats),allCats)).join('');
@@ -2597,7 +2605,7 @@ function renderRecent(elId,list,type){
     return`<div class="tx-item" onclick="openEditTx('${type}','${e.id}')" style="cursor:pointer">
       <div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
       <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)} · ${fmtD(e.date)}</div></div>
-      <div class="tx-right"><div class="tx-amt ${type==='exp'?'exp':type==='inc'?'inc':'sav'}">${type==='exp'?'−':'+'} ${fmt(e.amount)}</div></div>
+      <div class="tx-right"><div class="tx-amt ${type==='exp'?'exp':type==='inc'?'inc':'sav'}">${type==='exp'?'−':'+'} ${fmt(type==='exp'?expNet(e):e.amount)}</div></div>
     </div>`;
   }).join('');
 }
@@ -2915,15 +2923,17 @@ function renderHist(type){
     return`<div style="margin-bottom:24px">
       <div style="display:flex;justify-content:space-between;padding:0 22px;margin-bottom:10px">
         <div style="font-size:12px;color:var(--t3);font-weight:700;letter-spacing:.05em">${y}년 ${m}월</div>
-        <div style="font-size:13px;font-weight:700;color:${type==='exp'?'var(--red)':'var(--green)'}">${sign}${fmt(sumAmt(items))}</div>
+        <div style="font-size:13px;font-weight:700;color:${type==='exp'?'var(--red)':'var(--green)'}">${sign}${fmt(type==='exp'?sumExpNet(items):sumAmt(items))}</div>
       </div>
       <div class="tx-card" style="margin:0 22px">
         ${items.map(e=>{const ci=(type==='exp'?cats:catsForType(type)).find(c=>c.name===e.category)||{emoji:'📦'};const nk=type==='exp'?e.merchant:type==='inc'?e.source:e.name;
           const repaid=type==='exp'?repaidForExpense(e.id):0;
-          const settleLine=repaid>0?`<div style="font-size:11px;color:${repaid>=e.amount?'var(--green)':'var(--purple)'};margin-top:2px">${repaid>=e.amount?'✅ 정산 완료':`🔁 정산 ${fmt(repaid)}/${fmt(e.amount)}`}</div>`:'';
+          // 정산받은 만큼 뺀 실부담분을 메인 금액으로 보여주고, 원래 얼마였는지·얼마 받았는지는 배지로 따로 안내
+          const settleLine=repaid>0?`<div style="font-size:11px;color:${repaid>=e.amount?'var(--green)':'var(--purple)'};margin-top:2px">${repaid>=e.amount?`✅ 정산 완료 · 원래 ${fmt(e.amount)}`:`🔁 정산 ${fmt(repaid)} 받음 · 원래 ${fmt(e.amount)}`}</div>`:'';
+          const dispAmt=type==='exp'?expNet(e):e.amount;
           return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||'📦'}</div>
           <div class="tx-info"><div class="tx-name">${esc(nk)||'—'}</div><div class="tx-meta">${esc(e.category)}${e.payment?' · '+esc(e.payment):''} · ${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div>${settleLine}</div>
-          <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(e.amount)}</div><div class="tx-actions"><button class="tx-edit" onclick="openEditTx('${type}','${e.id}',event)">수정</button><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div></div>`;
+          <div class="tx-right"><div class="tx-amt ${amtCls}">${sign}${fmt(dispAmt)}</div><div class="tx-actions"><button class="tx-edit" onclick="openEditTx('${type}','${e.id}',event)">수정</button><button class="tx-del" onclick="delTx('${type}','${e.id}',event)">삭제</button></div></div></div>`;
         }).join('')}
       </div></div>`;
   }).join('');
@@ -3509,7 +3519,7 @@ function renderGoalRecommendation(goals){
   const{start,end}=PeriodStore.getRange();
   const cats=CatRepo.get();
   const spent={};
-  expOfPeriod(start,end).forEach(e=>spent[e.category]=(spent[e.category]||0)+e.amount);
+  expOfPeriod(start,end).forEach(e=>spent[e.category]=(spent[e.category]||0)+expNet(e));
   let best=null; // {cat, spend, over}
   cats.forEach(c=>{
     const spend=spent[c.name]||0;if(spend<=0)return;
@@ -3621,7 +3631,7 @@ function renderStats(){
   const{start,end}=PeriodStore.getRange();
   const{start:pstart,end:pend}=PeriodStore.getPrevRange();
   const el=expOfPeriod(start,end),il=incOfPeriod(start,end),sl=savOfPeriod(start,end);
-  const inc=sumAmt(il),exp=sumAmt(el),sav=sumAmt(sl);
+  const inc=sumAmt(il),exp=sumExpNet(el),sav=sumAmt(sl);
   document.getElementById('st-inc').textContent=fmt(inc);
   document.getElementById('st-exp').textContent=fmt(exp);
   document.getElementById('st-sav').textContent=fmt(sav);
@@ -3631,8 +3641,8 @@ function renderStats(){
   renderCatProg('stats-cat-prog',el,pel);
 
   const cats=CatRepo.get();
-  const spent={};el.forEach(e=>spent[e.category]=(spent[e.category]||0)+e.amount);
-  const prevSpent={};pel.forEach(e=>prevSpent[e.category]=(prevSpent[e.category]||0)+e.amount);
+  const spent={};el.forEach(e=>spent[e.category]=(spent[e.category]||0)+expNet(e));
+  const prevSpent={};pel.forEach(e=>prevSpent[e.category]=(prevSpent[e.category]||0)+expNet(e));
   const rows=Object.entries(spent).sort((a,b)=>b[1]-a[1]);
   const brEl=document.getElementById('stats-cat-break');
   if(!rows.length){brEl.innerHTML=`<div class="empty"><div class="empty-e">📊</div><div class="empty-t">지출 내역 없음</div></div>`;}
@@ -3660,7 +3670,7 @@ function renderStats(){
 
   const months=[];for(let i=5;i>=0;i--)months.push(addMonths(PeriodStore.current.startDate,-i));
   const trendData=months.map(m=>{const r=monthRange(m);return{
-    m,inc:sumAmt(incOfPeriod(r.start,r.end)),exp:sumAmt(expOfPeriod(r.start,r.end)),sav:sumAmt(savOfPeriod(r.start,r.end))
+    m,inc:sumAmt(incOfPeriod(r.start,r.end)),exp:sumExpNet(expOfPeriod(r.start,r.end)),sav:sumAmt(savOfPeriod(r.start,r.end))
   };});
   const maxV=Math.max(1,...trendData.flatMap(t=>[t.inc,t.exp,t.sav]));
   document.getElementById('trend-chart').innerHTML=trendData.map(t=>{
@@ -3693,7 +3703,7 @@ function renderCalendar(){
   const todayStr=today_();
   document.getElementById('cal-grid').innerHTML=cells.map(c=>{
     if(!c.dateStr)return`<div class="cal-cell empty other-month"><div class="cal-day">${c.day}</div></div>`;
-    const exp=sumAmt(ExpRepo.ofDate(c.dateStr)),inc=sumAmt(IncRepo.ofDate(c.dateStr)),sav=sumAmt(SavRepo.ofDate(c.dateStr));
+    const exp=sumExpNet(ExpRepo.ofDate(c.dateStr)),inc=sumAmt(IncRepo.ofDate(c.dateStr)),sav=sumAmt(SavRepo.ofDate(c.dateStr));
     const hol=getHoliday(c.dateStr);
     const isToday=c.dateStr===todayStr;
     const hasData=exp>0||inc>0||sav>0;
@@ -3714,7 +3724,7 @@ function openDayDetail(dateStr){
   const d=toDateObj(dateStr);
   document.getElementById('dd-date').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
   const el=ExpRepo.ofDate(dateStr),il=IncRepo.ofDate(dateStr),sl=SavRepo.ofDate(dateStr);
-  const exp=sumAmt(el),inc=sumAmt(il),sav=sumAmt(sl);
+  const exp=sumExpNet(el),inc=sumAmt(il),sav=sumAmt(sl);
   document.getElementById('dd-totals').innerHTML=
     (exp>0?`<div class="dd-total" style="color:var(--red)">지출 ${fmt(exp)}</div>`:'')+
     (inc>0?`<div class="dd-total" style="color:var(--green)">수입 ${fmt(inc)}</div>`:'')+
@@ -3723,7 +3733,7 @@ function openDayDetail(dateStr){
   let body='';
   if(el.length){body+=`<div class="dd-section-title">지출</div><div class="tx-card">`+el.map(e=>{
     const ci=cats.find(c=>c.name===e.category)||{emoji:'📦'};
-    return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji}</div><div class="tx-info"><div class="tx-name">${esc(e.merchant)||'—'}</div><div class="tx-meta">${esc(e.category)}</div></div><div class="tx-right"><div class="tx-amt exp">−${fmt(e.amount)}</div></div></div>`;
+    return`<div class="tx-item"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji}</div><div class="tx-info"><div class="tx-name">${esc(e.merchant)||'—'}</div><div class="tx-meta">${esc(e.category)}</div></div><div class="tx-right"><div class="tx-amt exp">−${fmt(expNet(e))}</div></div></div>`;
   }).join('')+`</div>`;}
   if(il.length){body+=`<div class="dd-section-title">수입</div><div class="tx-card">`+il.map(e=>
     `<div class="tx-item"><div class="tx-ico" style="background:rgba(46,139,87,.1)">💵</div><div class="tx-info"><div class="tx-name">${esc(e.source)||'—'}</div><div class="tx-meta">${esc(e.category)}</div></div><div class="tx-right"><div class="tx-amt inc">+${fmt(e.amount)}</div></div></div>`
@@ -3751,7 +3761,7 @@ function openCatDetail(catId,focusChildId){
   else{matchNames=[cat.name,...kids.map(k=>k.name)];headerEmoji=cat.emoji;headerName=cat.name;}
   const el=expOfPeriod(start,end).filter(e=>matchNames.includes(e.category));
   const il=incOfPeriod(start,end).filter(e=>matchNames.includes(e.category));
-  const exp=sumAmt(el),inc=sumAmt(il);
+  const exp=sumExpNet(el),inc=sumAmt(il);
   document.getElementById('dd-date').textContent=`${headerEmoji||'📦'} ${headerName}`;
   document.getElementById('dd-totals').innerHTML=
     (exp>0?`<div class="dd-total" style="color:var(--red)">지출 ${fmt(exp)}</div>`:'')+
@@ -3760,7 +3770,7 @@ function openCatDetail(catId,focusChildId){
   // 대분류 전체 보기이고 세부 항목이 있으면, 먼저 항목별 합계를 보여주고 탭하면 그 항목만 걸러서 다시 연다
   if(!focusChildId&&kids.length){
     const allExp=expOfPeriod(start,end);
-    const byName={};allExp.forEach(e=>{byName[e.category]=(byName[e.category]||0)+e.amount});
+    const byName={};allExp.forEach(e=>{byName[e.category]=(byName[e.category]||0)+expNet(e)});
     const rows=[{id:'DIRECT',emoji:cat.emoji,label:cat.name+' (세부 미지정)',amt:byName[cat.name]||0},
       ...kids.map(k=>({id:k.id,emoji:k.emoji,label:k.name,amt:byName[k.name]||0}))]
       .filter(r=>r.amt>0).sort((a,b)=>b.amt-a.amt);
@@ -3775,7 +3785,7 @@ function openCatDetail(catId,focusChildId){
   }
   if(el.length){body+=`<div class="dd-section-title">지출</div><div class="tx-card">`+el.map(e=>{
     const ci=(focusCat||allCats.find(c=>c.name===e.category))||cat;
-    return`<div class="tx-item" onclick="closeDayDetail();openEditTx('exp','${e.id}')"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||cat.emoji||'📦'}</div><div class="tx-info"><div class="tx-name">${esc(e.merchant)||'—'}</div><div class="tx-meta">${!focusChildId&&kids.length?esc(e.category)+' · ':''}${e.payment?esc(e.payment)+' · ':''}${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div><div class="tx-right"><div class="tx-amt exp">−${fmt(e.amount)}</div></div></div>`;
+    return`<div class="tx-item" onclick="closeDayDetail();openEditTx('exp','${e.id}')"><div class="tx-ico" style="background:rgba(212,148,31,.1)">${ci.emoji||cat.emoji||'📦'}</div><div class="tx-info"><div class="tx-name">${esc(e.merchant)||'—'}</div><div class="tx-meta">${!focusChildId&&kids.length?esc(e.category)+' · ':''}${e.payment?esc(e.payment)+' · ':''}${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div><div class="tx-right"><div class="tx-amt exp">−${fmt(expNet(e))}</div></div></div>`;
   }).join('')+`</div>`;}
   if(il.length){body+=`<div class="dd-section-title">수입</div><div class="tx-card">`+il.map(e=>
     `<div class="tx-item" onclick="closeDayDetail();openEditTx('inc','${e.id}')"><div class="tx-ico" style="background:rgba(46,139,87,.1)">💵</div><div class="tx-info"><div class="tx-name">${esc(e.source)||'—'}</div><div class="tx-meta">${fmtD(e.date)}${e.memo?' · '+esc(e.memo):''}</div></div><div class="tx-right"><div class="tx-amt inc">+${fmt(e.amount)}</div></div></div>`
@@ -3810,7 +3820,7 @@ function renderCatSettingList(){
   const tops=cats.filter(c=>!c.parentId);
   const spentMap={};
   const{start,end}=PeriodStore.getRange();
-  expOfPeriod(start,end).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+e.amount);
+  expOfPeriod(start,end).forEach(e=>spentMap[e.category]=(spentMap[e.category]||0)+expNet(e));
   document.getElementById('cat-setting-list').innerHTML=tops.map(c=>{
     const kids=cats.filter(k=>k.parentId===c.id);
     const agg=catAggSpent(c,spentMap,cats);
