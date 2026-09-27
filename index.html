@@ -2272,6 +2272,14 @@ function _dsPart(wrapId,key,part,val){
   const s=_ds[key],dMax=new Date(s.y,s.m,0).getDate();
   if(s.d>dMax)s.d=dMax;
   _renderDateSel(wrapId,key);
+  // 사진 인식(OCR) 화면은 체크박스·지출/수입 전환처럼 다른 항목을 건드리기만 해도
+  // renderOcrItems()가 전체를 다시 그리면서 날짜 선택칸도 새로 만든다 — 이때 it.date를
+  // 기준으로 다시 초기화되므로, 방금 고른 날짜를 즉시 그 항목에 반영해둬야
+  // "날짜를 바꿨는데 다른 걸 만지면 오늘 날짜로 되돌아간다"는 문제가 생기지 않는다.
+  if(key.indexOf('ocr-')===0){
+    const it=_ocrItems.find(x=>x._uid===key.slice(4));
+    if(it)it.date=getDateStr(key);
+  }
 }
 function getDateStr(key){
   const s=_ds[key];if(!s)return today_();
